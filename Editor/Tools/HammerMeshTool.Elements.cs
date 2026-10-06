@@ -48,6 +48,7 @@ namespace HammerUnity.EditorTools
 				if ( !DrawsInCamera( view ) ) DrawElements();
 				DrawDimensions();
 				DrawEdgeAngle();
+				DrawSnapMarker();
 
 				// Hammer shows the length of the edge under the mouse
 				if ( HammerSettings.EdgeLengthPreview && _hover is MeshEdge hoverEdge && hoverEdge.IsValid && !_dragging )

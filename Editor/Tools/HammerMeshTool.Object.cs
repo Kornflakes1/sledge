@@ -32,6 +32,7 @@ namespace HammerUnity.EditorTools
 					DrawSelectedObjects();
 
 				DrawDimensions();
+				DrawSnapMarker();
 			}
 
 			if ( transforms.Length == 0 )

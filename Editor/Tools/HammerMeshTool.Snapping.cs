@@ -8,6 +8,39 @@ namespace HammerUnity.EditorTools
 	{
 		const float VertexSnapPixels = 12;
 
+		// Hammer shows the vertex it's about to snap to: a red ring as the mouse nears it, then
+		// green with a yellow dot once it has snapped
+		const float VertexPreviewPixels = 36;
+		Vector3? _snapCandidate;
+		bool _snappedToVertex;
+		static readonly Color SnapNearColor = new( 0.95f, 0.18f, 0.15f );
+		static readonly Color SnapOnColor = new( 0.2f, 0.9f, 0.25f );
+		static readonly Color SnapDotColor = new( 1.0f, 0.88f, 0.15f );
+
+		/// <summary>The vertex snap marker, while a move is being dragged.</summary>
+		void DrawSnapMarker()
+		{
+			if ( !(_dragging || _objectDragging) ) { _snapCandidate = null; return; }
+			if ( !_snapCandidate.HasValue ) return;
+
+			var p = _snapCandidate.Value;
+			var camera = HammerGUI.Camera;
+			if ( camera == null ) return;
+			var normal = camera.orthographic ? camera.transform.forward : (p - camera.transform.position).normalized;
+			var radius = HammerGUI.HandleSize( p ) * 0.022f;
+
+			var z = UnityEditor.Handles.zTest;
+			UnityEditor.Handles.zTest = UnityEngine.Rendering.CompareFunction.Always;
+			if ( _snappedToVertex )
+			{
+				UnityEditor.Handles.color = SnapDotColor;
+				UnityEditor.Handles.DrawSolidDisc( p, normal, radius * 0.6f );
+			}
+			UnityEditor.Handles.color = _snappedToVertex ? SnapOnColor : SnapNearColor;
+			UnityEditor.Handles.DrawWireDisc( p, normal, radius, 3.0f );
+			UnityEditor.Handles.zTest = z;
+		}
+
 		/// <summary>
 		/// Hammer's snap modes while moving: a vertex of other geometry near the mouse wins, then
 		/// (objects only) the surface under the mouse. Returns false to fall back to the grid.
@@ -26,10 +59,20 @@ namespace HammerUnity.EditorTools
 				else if ( ElementOnSurface( mouse, out target ) ) return true;
 			}
 
+			_snapCandidate = null;
+			_snappedToVertex = false;
 			if ( !HammerSettings.SnapEnabled ) return false;
 
-			if ( HammerSettings.VertexSnap && NearestVertex( mouse, objects, out target ) )
-				return true;
+			if ( HammerSettings.VertexSnap && NearestVertex( mouse, objects, VertexPreviewPixels, out var vertex, out var pixels ) )
+			{
+				_snapCandidate = vertex;
+				if ( pixels < VertexSnapPixels )
+				{
+					_snappedToVertex = true;
+					target = vertex;
+					return true;
+				}
+			}
 
 			if ( HammerSettings.SurfaceSnap && objects != null && objects.Count > 0 && OnSurface( mouse, pivotStart, objects, out target ) )
 				return true;
@@ -40,11 +83,11 @@ namespace HammerUnity.EditorTools
 		/// <summary>
 		/// Closest vertex on screen to the mouse, not counting what's being moved.
 		/// </summary>
-		bool NearestVertex( Vector2 mouse, ICollection<HammerMesh> movingObjects, out Vector3 world )
+		bool NearestVertex( Vector2 mouse, ICollection<HammerMesh> movingObjects, float within, out Vector3 world, out float pixels )
 		{
 			world = default;
 			var moving = movingObjects == null ? SelectionVertices() : null;
-			var best = VertexSnapPixels;
+			var best = within;
 			var found = false;
 
 			foreach ( var component in MeshPicking.VisibleMeshes() )
@@ -70,6 +113,7 @@ namespace HammerUnity.EditorTools
 				}
 			}
 
+			pixels = best;
 			return found;
 		}
 

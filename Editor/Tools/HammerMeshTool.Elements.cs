@@ -154,6 +154,17 @@ namespace HammerUnity.EditorTools
 
 					_middleLasso = middle;
 
+					// Hammer: Shift+drag in the 3D view paints a selection over whatever the mouse
+					// passes (Shift+drag in the 2D views still boxes)
+					_paintSelecting = !middle && e.shift && !e.alt && e.clickCount < 2 && _view != null && !_view.Orthographic;
+					if ( _paintSelecting )
+					{
+						Undo.IncrementCurrentGroup();
+						Undo.SetCurrentGroupName( "Paint Selection" );
+						_paintSelectLast = e.mousePosition;
+						PaintSelect( e.mousePosition );
+					}
+
 					GUIUtility.hotControl = _controlId;
 					_clickCount = e.clickCount;
 					_altClick = e.alt;
@@ -168,6 +179,17 @@ namespace HammerUnity.EditorTools
 				case EventType.MouseDrag:
 					if ( !_mouseDown || GUIUtility.hotControl != _controlId )
 						break;
+
+					if ( _paintSelecting )
+					{
+						// Every few pixels along the way, so a quick flick doesn't skip faces
+						var steps = Mathf.Max( 1, Mathf.CeilToInt( Vector2.Distance( _paintSelectLast, e.mousePosition ) / 6 ) );
+						for ( int i = 1; i <= steps; i++ )
+							PaintSelect( Vector2.Lerp( _paintSelectLast, e.mousePosition, i / (float)steps ) );
+						_paintSelectLast = e.mousePosition;
+						e.Use();
+						break;
+					}
 
 					if ( !_boxSelecting && Vector2.Distance( _mouseDownPosition, e.mousePosition ) > 4 )
 						_boxSelecting = true;
@@ -185,7 +207,13 @@ namespace HammerUnity.EditorTools
 					GUIUtility.hotControl = 0;
 					_mouseDown = false;
 
-					if ( _boxSelecting )
+					if ( _paintSelecting )
+					{
+						_paintSelecting = false;
+						_boxSelecting = false;
+						HammerViews.RepaintAll();
+					}
+					else if ( _boxSelecting )
 					{
 						if ( Lassoing && _lasso.Count > 2 )
 						{
@@ -213,6 +241,18 @@ namespace HammerUnity.EditorTools
 
 			if ( _boxSelecting && e.type == EventType.Repaint )
 				DrawSelectionRegion( _mouseDownPosition, e.mousePosition, Lassoing ? _lasso : null );
+		}
+
+		bool _paintSelecting;
+		Vector2 _paintSelectLast;
+
+		/// <summary>Shift+drag in 3D: add whatever's under the mouse to the selection.</summary>
+		void PaintSelect( Vector2 mouse )
+		{
+			var element = PickElement( mouse );
+			if ( element == null || !element.IsValid || Selection.Contains( element ) ) return;
+			Selection.Add( element );
+			HammerViews.RepaintAll();
 		}
 
 		/// <summary>

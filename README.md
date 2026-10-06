@@ -116,7 +116,8 @@ These keys work while the Hammer window is focused. To change any of them, go to
 | --- | --- |
 | 1 / 2 / 3 / 4 | Vertex / Edge / Face / Mesh mode |
 | T / R / E | Move / Rotate / Scale |
-| Shift+drag | Extrude |
+| Shift+drag (on the gizmo) | Extrude |
+| Shift+drag (3D view) | Paint-select every face, edge or vertex the mouse passes over |
 | Tab | Switch between world and local axes. Hold it and click to place the pivot |
 | [ / ] | Smaller / larger grid |
 | Ctrl (while dragging) | Turn grid snapping off or on |

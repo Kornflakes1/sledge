@@ -1010,6 +1010,8 @@ namespace HammerUnity.EditorTools
 					camera.SetReplacementShader( FullbrightShader, "RenderType" );
 				else
 					camera.ResetReplacementShader();
+				// (URP ignores replacement shaders: Hammer's own shader does fullbright itself there)
+				Shader.SetGlobalFloat( FullbrightId, view.Shading == ViewShading.Fullbright ? 1 : 0 );
 
 				camera.Render();
 			}
@@ -1019,6 +1021,7 @@ namespace HammerUnity.EditorTools
 					foreach ( var r in hidden ) r.forceRenderingOff = false;
 
 				GL.wireframe = wire;
+				Shader.SetGlobalFloat( FullbrightId, 0 );
 				Camera.onPostRender -= DrawOverlay;
 				UnityEngine.Rendering.RenderPipelineManager.endCameraRendering -= DrawOverlaySrp;
 				_overlayCamera = null;
@@ -1061,7 +1064,33 @@ namespace HammerUnity.EditorTools
 
 		static Shader FullbrightShader => _fullbright != null ? _fullbright : _fullbright = Shader.Find( "Hammer/Fullbright" );
 
-		void DrawOverlaySrp( UnityEngine.Rendering.ScriptableRenderContext context, Camera camera ) => DrawOverlay( camera );
+		static readonly int FullbrightId = Shader.PropertyToID( "_HammerFullbright" );
+
+		/// <summary>
+		/// Scriptable pipelines don't leave the camera's target and matrices set up when they
+		/// finish a camera, as the built-in one does in OnPostRender: set them up for the overlay.
+		/// </summary>
+		void DrawOverlaySrp( UnityEngine.Rendering.ScriptableRenderContext context, Camera camera )
+		{
+			if ( camera != _overlayCamera || camera.targetTexture == null )
+				return;
+
+			var previous = RenderTexture.active;
+			RenderTexture.active = camera.targetTexture;
+			GL.PushMatrix();
+			GL.Viewport( new Rect( 0, 0, camera.targetTexture.width, camera.targetTexture.height ) );
+			GL.LoadProjectionMatrix( camera.projectionMatrix );
+			GL.modelview = camera.worldToCameraMatrix;
+			try
+			{
+				DrawOverlay( camera );
+			}
+			finally
+			{
+				GL.PopMatrix();
+				RenderTexture.active = previous;
+			}
+		}
 
 		void DrawOverlay( Camera camera )
 		{

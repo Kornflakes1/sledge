@@ -40,7 +40,7 @@ without leaving Unity.
 
 ## Install
 
-1. Requires **Unity 6**.
+1. Requires **Unity 6**, with the Built-in render pipeline or URP (HDRP isn't supported yet).
 2. Open **Window > Package Manager**, click **+**, choose **Add package from disk…** and pick
    this folder's `package.json`. You can also copy the folder into your project's `Packages/`
    folder.

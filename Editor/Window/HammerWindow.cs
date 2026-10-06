@@ -822,12 +822,10 @@ namespace HammerUnity.EditorTools
 
 			Separator();
 
-			var block = _tool.Mode == EditMode.Primitive && HammerSettings.PrimitiveType == "Box";
-			if ( Button( HammerIcons.Block, "Block tool (Shift+B)", block ) )
-			{
-				HammerSettings.PrimitiveType = "Box";
+			// One Block tool for every shape, as in Hammer: the shape is Geometry Type in Tool Properties
+			var block = _tool.Mode == EditMode.Primitive;
+			if ( Button( HammerIcons.Block, "Block tool: box, cylinder, stairs, arch... (pick Geometry Type in Tool Properties) (Shift+B)", block ) )
 				_tool.Mode = block ? EditMode.Face : EditMode.Primitive;
-			}
 
 			if ( Button( HammerIcons.PolygonIcon, "Polygon tool: click out a shape, then set its height (Shift+P)", _tool.SubTool is PolygonTool ) )
 			{
@@ -835,16 +833,6 @@ namespace HammerUnity.EditorTools
 				else PolygonTool.Open( _tool );
 			}
 
-			var shape = _tool.Mode == EditMode.Primitive && !block;
-			if ( Button( HammerIcons.Shape, "Shapes: cylinder, sphere, stairs, arch... (pick in Tool Properties)", shape ) )
-			{
-				if ( shape ) _tool.Mode = EditMode.Face;
-				else
-				{
-					if ( HammerSettings.PrimitiveType == "Box" ) HammerSettings.PrimitiveType = "Cylinder";
-					_tool.Mode = EditMode.Primitive;
-				}
-			}
 			if ( Button( HammerIcons.Paint, "Vertex paint (5)", _tool.Mode == EditMode.Paint ) )
 				_tool.Mode = _tool.Mode == EditMode.Paint ? EditMode.Face : EditMode.Paint;
 

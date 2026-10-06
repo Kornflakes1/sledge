@@ -140,7 +140,7 @@ namespace HammerUnity.EditorTools
 				EditMode.Edge => ("Edge", HammerIcons.Edge, $"{tool.SelectedEdges.Count()} selected"),
 				EditMode.Face => ("Face", HammerIcons.Face, $"{tool.SelectedFaces.Count()} selected"),
 				EditMode.Object => ("Object", HammerIcons.Object, $"{UnityEditor.Selection.gameObjects.Length} selected"),
-				EditMode.Primitive => ("Shape Tool", HammerIcons.Shape, ""),
+				EditMode.Primitive => ("Block Tool", HammerIcons.Block, ""),
 				_ => ("Vertex Paint", HammerIcons.Paint, ""),
 			};
 

@@ -566,7 +566,7 @@ namespace HammerUnity.EditorTools
 					EditMode.Edge => Plural( Selection.Count, "edge", "edges" ),
 					EditMode.Face => Plural( Selection.Count, "face", "faces" ),
 					EditMode.Object => Plural( UnityEditor.Selection.gameObjects.Length, "object", "objects" ),
-					EditMode.Primitive => "Shape tool",
+					EditMode.Primitive => "Block tool",
 					_ => "Vertex paint",
 				};
 

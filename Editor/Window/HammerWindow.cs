@@ -857,9 +857,9 @@ namespace HammerUnity.EditorTools
 
 			Separator();
 
-			// One Block tool for every shape, as in Hammer: the shape is Geometry Type in Tool Properties
+			// One Block tool for every shape, as in Hammer: the shape is Shape in Tool Properties
 			var block = _tool.Mode == EditMode.Primitive;
-			if ( Button( HammerIcons.Block, "Block tool: box, cylinder, stairs, arch... (pick Geometry Type in Tool Properties) (Shift+B)", block ) )
+			if ( Button( HammerIcons.Block, "Block tool: box, cylinder, stairs, arch... (pick Shape in Tool Properties) (Shift+B)", block ) )
 				_tool.Mode = block ? EditMode.Face : EditMode.Primitive;
 
 			if ( Button( HammerIcons.PolygonIcon, "Polygon tool: click out a shape, then set its height (Shift+P)", _tool.SubTool is PolygonTool ) )

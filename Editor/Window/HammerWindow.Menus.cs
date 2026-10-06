@@ -192,7 +192,7 @@ namespace HammerUnity.EditorTools
 
 		List<BarItem> HelpMenu() => new()
 		{
-			Do( "How do I...", "", () => { _openGuidePicker = true; Repaint(); } ),
+			Do( "How do I...", "", () => HammerGuides.OpenPicker( _tool ) ),
 			Do( "Take the Tour", "", () => HammerGuides.Start( HammerGuides.Tour, _tool ) ),
 			Do( "Stop Guide", "", HammerGuides.Stop, () => HammerGuides.Running ),
 			Separator,
@@ -227,18 +227,8 @@ namespace HammerUnity.EditorTools
 			Title( "Edit", EditMenu );
 			Title( "View", ViewMenu );
 			Title( "Tools", ToolsMenu );
-			var help = new Rect( x, rect.y, 1, rect.height );
 			Title( "Help", HelpMenu );
-
-			// (Opened here, inside OnGUI, where a popup can be placed)
-			if ( _openGuidePicker && Event.current.type == EventType.Repaint )
-			{
-				_openGuidePicker = false;
-				PopupWindow.Show( help, new HammerGuides.Picker( _tool ) );
-			}
 		}
-
-		bool _openGuidePicker;
 
 		/// <summary>The drop-down list for one menu, drawn like Hammer's: label left, shortcut right, greyed when it can't run.</summary>
 		sealed class MenuPopup : PopupWindowContent

@@ -41,7 +41,23 @@ namespace HammerUnity.EditorTools
 			public EditMode Mode => Tool.Mode;
 			public SubTool SubTool => Tool.SubTool;
 			public int Meshes => UnityEngine.Object.FindObjectsByType<HammerMesh>( FindObjectsSortMode.None ).Length;
-			public int Faces => UnityEngine.Object.FindObjectsByType<HammerMesh>( FindObjectsSortMode.None ).Sum( c => c.Mesh?.FaceHandles.Count() ?? 0 );
+			// Counted at most a few times a second: steps are checked on every repaint
+			int _faces;
+			double _facesAt = -1;
+			public int Faces
+			{
+				get
+				{
+					var now = EditorApplication.timeSinceStartup;
+					if ( _facesAt < 0 || now - _facesAt > 0.25 )
+					{
+						_faces = UnityEngine.Object.FindObjectsByType<HammerMesh>( FindObjectsSortMode.None ).Sum( c => c.Mesh?.FaceHandles.Count() ?? 0 );
+						_facesAt = now;
+					}
+					return _faces;
+				}
+			}
+			public void Recount() => _facesAt = -1;
 			public bool MadeAMesh => Meshes > MeshesAtStart;
 			public bool FacesChanged => Faces != FacesAtStart;
 			public int SelectedFaces => Tool.SelectedFaces.Count();
@@ -68,6 +84,7 @@ namespace HammerUnity.EditorTools
 
 		public static void Start( Guide guide, HammerMeshTool tool )
 		{
+			_picking = false;
 			_current = guide;
 			_step = 0;
 			_context = new Context { Tool = tool };
@@ -78,6 +95,7 @@ namespace HammerUnity.EditorTools
 		public static void Stop()
 		{
 			_current = null;
+			_picking = false;
 			HammerViews.RepaintAll();
 		}
 
@@ -86,6 +104,7 @@ namespace HammerUnity.EditorTools
 		{
 			if ( _context?.Tool == null ) return;
 			_context.MeshesAtStart = _context.Meshes;
+			_context.Recount();
 			_context.FacesAtStart = _context.Faces;
 		}
 
@@ -107,7 +126,8 @@ namespace HammerUnity.EditorTools
 		{
 			Styles();
 			var step = _current.Steps[_step];
-			return 30 + _text.CalcHeight( new GUIContent( step.Text ), Width - 24 ) + 44;
+			var text = step.Text + (step.Done != null ? "\nDo it and this moves on by itself." : "");
+			return 30 + _text.CalcHeight( new GUIContent( text ), Width - 24 ) + 44;
 		}
 
 		static void Styles()
@@ -117,44 +137,110 @@ namespace HammerUnity.EditorTools
 			_small ??= new GUIStyle( EditorStyles.miniLabel ) { alignment = TextAnchor.MiddleRight, normal = { textColor = new Color( 0.65f, 0.65f, 0.65f ) } };
 		}
 
+		// Help > How do I...: the list of guides, in the same corner as the steps
+		static bool _picking;
+		static HammerMeshTool _pickTool;
+		static Vector2 _pickScroll;
+		const float PickerHeight = 380;
+
+		public static void OpenPicker( HammerMeshTool tool )
+		{
+			_picking = true;
+			_pickTool = tool;
+			_current = null;
+			HammerViews.RepaintAll();
+		}
+
+		static bool Showing => _current != null || _picking;
+
+		static Rect CurrentRect( Rect area ) => PanelRect( area, _picking ? PickerHeight : Height() );
+
 		/// <summary>
 		/// Before the views: the popup's buttons take their clicks, and clicks on the popup don't
 		/// fall through to the view under it.
 		/// </summary>
 		public static void Input( Rect area )
 		{
-			if ( _current == null || Event.current.type == EventType.Repaint || Event.current.type == EventType.Layout ) return;
-			var rect = PanelRect( area, Height() );
-			Buttons( rect );
-			if ( Event.current.isMouse && rect.Contains( Event.current.mousePosition ) ) Event.current.Use();
+			var e = Event.current;
+			if ( !Showing || e.type == EventType.Repaint || e.type == EventType.Layout ) return;
+			var rect = CurrentRect( area );
+			Contents( rect );
+			if ( (e.isMouse || e.type == EventType.ScrollWheel) && rect.Contains( e.mousePosition ) ) e.Use();
 		}
 
 		/// <summary>After the views: check the step, outline what it's about, draw the popup.</summary>
 		public static void Draw( Rect area, Func<string, Rect?> areaOf )
 		{
-			if ( _current == null || Event.current.type != EventType.Repaint ) return;
+			if ( !Showing || Event.current.type != EventType.Repaint ) return;
 
-			// A step that sees itself done moves on (after a moment, so the tick shows)
-			var step = _current.Steps[_step];
-			if ( step.Done != null && _tickedAt <= 0 && SafeDone( step ) )
-				_tickedAt = EditorApplication.timeSinceStartup;
-			if ( _tickedAt > 0 && EditorApplication.timeSinceStartup - _tickedAt > 0.6 )
+			// The views leave Handles' camera set up: back to plain window drawing, as the view
+			// labels do
+			Handles.BeginGUI();
+			try
 			{
-				_tickedAt = 0;
-				if ( _step < _current.Steps.Count - 1 ) Go( _step + 1 );
-				step = _current.Steps[_step];
+				if ( _current != null )
+				{
+					// A step that sees itself done moves on (after a moment, so the tick shows)
+					var step = _current.Steps[_step];
+					if ( step.Done != null && _tickedAt <= 0 && SafeDone( step ) )
+						_tickedAt = EditorApplication.timeSinceStartup;
+					if ( _tickedAt > 0 && EditorApplication.timeSinceStartup - _tickedAt > 0.6 )
+					{
+						_tickedAt = 0;
+						if ( _step < _current.Steps.Count - 1 ) Go( _step + 1 );
+						step = _current.Steps[_step];
+					}
+					if ( _tickedAt > 0 ) HammerViews.RepaintAll();
+
+					if ( step.Highlight != null && areaOf( step.Highlight ) is Rect h )
+						Outline( h, new Color( 1.0f, 0.6f, 0.15f ), 2 );
+				}
+
+				var rect = CurrentRect( area );
+				EditorGUI.DrawRect( new Rect( rect.x + 3, rect.y + 3, rect.width, rect.height ), new Color( 0, 0, 0, 0.35f ) );
+				EditorGUI.DrawRect( rect, new Color( 0.13f, 0.13f, 0.14f, 0.97f ) );
+				EditorGUI.DrawRect( new Rect( rect.x, rect.y, rect.width, 3 ), new Color( 1.0f, 0.6f, 0.15f ) );
+				Contents( rect );
 			}
-			if ( _tickedAt > 0 ) HammerViews.RepaintAll();
+			finally
+			{
+				Handles.EndGUI();
+			}
+		}
 
-			if ( step.Highlight != null && areaOf( step.Highlight ) is Rect h )
-				Outline( h, new Color( 1.0f, 0.6f, 0.15f ), 2 );
-
-			var rect = PanelRect( area, Height() );
-			EditorGUI.DrawRect( new Rect( rect.x + 3, rect.y + 3, rect.width, rect.height ), new Color( 0, 0, 0, 0.35f ) );
-			EditorGUI.DrawRect( rect, new Color( 0.13f, 0.13f, 0.14f, 0.97f ) );
-			EditorGUI.DrawRect( new Rect( rect.x, rect.y, rect.width, 3 ), new Color( 1.0f, 0.6f, 0.15f ) );
-
+		/// <summary>What's in the popup: the current step, or the list of guides.</summary>
+		static void Contents( Rect rect )
+		{
 			Styles();
+			if ( GUI.Button( new Rect( rect.xMax - 28, rect.y + 6, 20, 18 ), "✕", EditorStyles.miniButton ) )
+			{
+				_picking = false;
+				Stop();
+				return;
+			}
+
+			if ( _picking )
+			{
+				GUI.Label( new Rect( rect.x + 12, rect.y + 6, rect.width - 50, 20 ), "How do I...", _title );
+				var list = new Rect( rect.x + 8, rect.y + 30, rect.width - 16, rect.height - 38 );
+				var inner = new Rect( 0, 0, list.width - 16, All.Count * 24 );
+				_pickScroll = GUI.BeginScrollView( list, _pickScroll, inner );
+				for ( int i = 0; i < All.Count; i++ )
+				{
+					var row = new Rect( 0, i * 24, inner.width, 22 );
+					if ( Event.current.type == EventType.Repaint && row.Contains( Event.current.mousePosition ) )
+						EditorGUI.DrawRect( row, new Color( 0.24f, 0.37f, 0.6f ) );
+					if ( GUI.Button( row, "  " + All[i].Title, _text ) )
+					{
+						_picking = false;
+						Start( All[i], _pickTool ?? HammerMeshTool.Focused );
+					}
+				}
+				GUI.EndScrollView();
+				return;
+			}
+
+			var step = _current.Steps[_step];
 			GUI.Label( new Rect( rect.x + 12, rect.y + 6, rect.width - 110, 20 ), _current.Title, _title );
 			GUI.Label( new Rect( rect.xMax - 110, rect.y + 6, 80, 20 ), $"Step {_step + 1} of {_current.Steps.Count}", _small );
 
@@ -162,19 +248,8 @@ namespace HammerUnity.EditorTools
 			if ( _tickedAt > 0 ) text = "<color=#5f5>✓</color> " + text;
 			else if ( step.Done != null ) text += "\n<color=#999><i>Do it and this moves on by itself.</i></color>";
 			GUI.Label( new Rect( rect.x + 12, rect.y + 28, rect.width - 24, rect.height - 70 ), text, _text );
-			Buttons( rect );
-		}
 
-		static bool SafeDone( Step step )
-		{
-			try { return _context.Tool != null && step.Done( _context ); }
-			catch ( Exception ) { return false; }
-		}
-
-		static void Buttons( Rect rect )
-		{
 			var y = rect.yMax - 32;
-			if ( GUI.Button( new Rect( rect.xMax - 28, rect.y + 6, 20, 18 ), "✕", EditorStyles.miniButton ) ) { Stop(); return; }
 			GUI.enabled = _step > 0;
 			if ( GUI.Button( new Rect( rect.x + 12, y, 70, 22 ), "Back" ) ) Go( _step - 1 );
 			GUI.enabled = true;
@@ -184,6 +259,12 @@ namespace HammerUnity.EditorTools
 				if ( last ) Stop();
 				else Go( _step + 1 );
 			}
+		}
+
+		static bool SafeDone( Step step )
+		{
+			try { return _context.Tool != null && step.Done( _context ); }
+			catch ( Exception ) { return false; }
 		}
 
 		static void Outline( Rect r, Color color, float width )
@@ -224,7 +305,7 @@ namespace HammerUnity.EditorTools
 				Steps =
 				{
 					S( "Press <b>Shift+B</b> (or the cube on the tool strip) for the Block tool.", c => c.Mode == EditMode.Primitive, "strip" ),
-					S( "In Tool Properties set <b>Geometry Type</b> to Box.", c => HammerSettings.PrimitiveType == "Box", "panel" ),
+					S( "In Tool Properties set the <b>Shape</b> to Box.", c => HammerSettings.PrimitiveType == "Box", "panel" ),
 					S( "In a view, <b>drag out the base</b>, let go, then move the mouse for the <b>height</b> and click. Drag the handles to adjust.", null, "views" ),
 					S( "Press <b>Enter</b> to make it.", c => c.MadeAMesh ),
 				},
@@ -235,7 +316,7 @@ namespace HammerUnity.EditorTools
 				Steps =
 				{
 					S( "Press <b>Shift+B</b> for the Block tool.", c => c.Mode == EditMode.Primitive, "strip" ),
-					S( "Set <b>Geometry Type</b> to Stairs in Tool Properties. The number of steps is there too.", c => HammerSettings.PrimitiveType == "Stairs", "panel" ),
+					S( "Set the <b>Shape</b> to Stairs in Tool Properties. The number of steps is there too.", c => HammerSettings.PrimitiveType == "Stairs", "panel" ),
 					S( "Drag out the base, then the height, and press <b>Enter</b>.", c => c.MadeAMesh, "views" ),
 				},
 			},
@@ -245,7 +326,7 @@ namespace HammerUnity.EditorTools
 				Steps =
 				{
 					S( "Press <b>Shift+B</b> for the Block tool.", c => c.Mode == EditMode.Primitive, "strip" ),
-					S( "Set <b>Geometry Type</b> to Doorway. Give it an <b>Arch Height</b> for a round top.", c => HammerSettings.PrimitiveType == "Doorway", "panel" ),
+					S( "Set the <b>Shape</b> to Doorway. Give it an <b>Arch Height</b> for a round top.", c => HammerSettings.PrimitiveType == "Doorway", "panel" ),
 					S( "Drag it out and press <b>Enter</b>.", c => c.MadeAMesh, "views" ),
 					S( "For an arch along existing edges instead: in Edges mode (2) select two edges and press <b>Y</b>." ),
 				},
@@ -385,53 +466,5 @@ namespace HammerUnity.EditorTools
 				},
 			},
 		};
-
-		// ── Picking a guide ──
-
-		/// <summary>Help > How do I...: a searchable list of guides.</summary>
-		public sealed class Picker : PopupWindowContent
-		{
-			readonly HammerMeshTool _tool;
-			string _search = "";
-			Vector2 _scroll;
-
-			public Picker( HammerMeshTool tool ) => _tool = tool;
-
-			public override Vector2 GetWindowSize() => new( 300, 360 );
-
-			public override void OnGUI( Rect rect )
-			{
-				GUILayout.Label( "How do I...", EditorStyles.boldLabel );
-				GUI.SetNextControlName( "GuideSearch" );
-				_search = EditorGUILayout.TextField( _search, EditorStyles.toolbarSearchField );
-				if ( Event.current.type == EventType.Repaint && string.IsNullOrEmpty( GUI.GetNameOfFocusedControl() ) ) EditorGUI.FocusTextInControl( "GuideSearch" );
-
-				var words = _search.ToLowerInvariant().Split( ' ', StringSplitOptions.RemoveEmptyEntries );
-				var matches = All.Where( g => words.All( w => (g.Title + " " + g.Keywords).ToLowerInvariant().Contains( w ) ) ).ToList();
-
-				_scroll = GUILayout.BeginScrollView( _scroll );
-				foreach ( var guide in matches )
-				{
-					if ( GUILayout.Button( guide.Title, EditorStyles.label ) )
-					{
-						editorWindow.Close();
-						var tool = _tool;
-						EditorApplication.delayCall += () => Start( guide, tool );
-						GUIUtility.ExitGUI();
-					}
-				}
-				if ( matches.Count == 0 ) GUILayout.Label( "No guides match.", EditorStyles.miniLabel );
-				GUILayout.EndScrollView();
-
-				if ( Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Return && matches.Count > 0 )
-				{
-					editorWindow.Close();
-					var tool = _tool;
-					var first = matches[0];
-					EditorApplication.delayCall += () => Start( first, tool );
-					GUIUtility.ExitGUI();
-				}
-			}
-		}
 	}
 }

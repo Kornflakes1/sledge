@@ -128,7 +128,7 @@ namespace HammerUnity.EditorTools
 				{
 					var delta = _dragDelta;
 					if ( delta.sqrMagnitude < 1e-12f ) return;
-					Remember( extrude ? "Extrude" : "Move", () => RepeatDrag( extrude, _ => ApplyTranslate( delta ) ) );
+					Remember( extrude ? "Extrude" : "Move", () => RepeatDrag( extrude, pivot => Translate( pivot, delta ) ) );
 					break;
 				}
 
@@ -245,7 +245,7 @@ namespace HammerUnity.EditorTools
 			switch ( kind )
 			{
 				case DragKind.Move:
-					RepeatDrag( extrude, _ => ApplyTranslate( direction * value * SourceSpace.UnitScale ) );
+					RepeatDrag( extrude, pivot => Translate( pivot, direction * value * SourceSpace.UnitScale ) );
 					break;
 				case DragKind.Rotate:
 					RepeatDrag( extrude, _ => ApplyRotate( pivot, Quaternion.AngleAxis( value, axis ) ) );
@@ -263,7 +263,7 @@ namespace HammerUnity.EditorTools
 		// ── The gizmo drags, done from code (the tutorial map builds with these) ──
 
 		/// <summary>Drag the move handle by <paramref name="delta"/> (world); Shift extrudes first.</summary>
-		internal void ScriptedMove( Vector3 delta, bool extrude = false ) => RepeatDrag( extrude, _ => ApplyTranslate( delta ) );
+		internal void ScriptedMove( Vector3 delta, bool extrude = false ) => RepeatDrag( extrude, pivot => Translate( pivot, delta ) );
 
 		/// <summary>Turn the selection about <paramref name="pivot"/>; Shift extrudes first.</summary>
 		internal void ScriptedRotate( Vector3 pivot, Quaternion rotation, bool extrude = false ) => RepeatDrag( extrude, _ => ApplyRotate( pivot, rotation ) );
@@ -271,9 +271,17 @@ namespace HammerUnity.EditorTools
 		/// <summary>Scale the selection about its middle (or the pivot) along world axes; Shift extrudes first.</summary>
 		internal void ScriptedScale( Vector3 scale, bool extrude = false ) => RepeatDrag( extrude, pivot => ApplyScale( pivot, Quaternion.identity, scale ) );
 
+		/// <summary>A move without the gizmo: the handle (and a placed pivot) go along, as when dragged.</summary>
+		void Translate( Vector3 pivot, Vector3 delta )
+		{
+			ApplyTranslate( delta );
+			_handlePosition = pivot + delta;
+		}
+
 		/// <summary>Place the pivot (Insert), or clear it with null.</summary>
 		internal void ScriptedPivot( Vector3? pivot )
 		{
+			RecordPivot();
 			_customPivot = pivot;
 			_pivotSelectionVersion = Selection.Version;
 		}

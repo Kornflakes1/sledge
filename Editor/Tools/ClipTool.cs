@@ -44,6 +44,19 @@ namespace HammerUnity.EditorTools
 		public override string Title => "Clipping Tool";
 		public override string Help => "Drag across a surface to set the cut. Shift+X cycles which side is kept. Enter applies, Space applies and stays, Esc cancels.";
 
+		public override (string Key, string Operation)[] Keys => new[]
+		{
+			("Enter", "Finish Clip"),
+			("Space", "Apply Clip"),
+			("Esc", "Cancel Clip"),
+			("Shift+X", "Cycle Clipping Side"),
+			("Ctrl+Shift+X", "Toggle Create Caps"),
+			("G", "Rotate Plane CW"),
+			("F", "Rotate Plane CCW"),
+		};
+
+		static readonly Color Cyan = new( 0.15f, 0.95f, 1.0f );
+
 		public static void Open( HammerMeshTool tool )
 		{
 			var clip = new ClipTool();
@@ -83,12 +96,21 @@ namespace HammerUnity.EditorTools
 
 		public override void OnOverlayGUI()
 		{
-			var keep = (KeepMode)GUILayout.Toolbar( (int)_keep, new[] { "Front", "Back", "Both" }, EditorStyles.miniButton );
-			if ( keep != _keep )
+			GUILayout.Label( "Keep Mode", EditorStyles.miniLabel );
+			using ( new GUILayout.HorizontalScope() )
 			{
-				_keep = keep;
-				Preview();
+				GUILayout.FlexibleSpace();
+				foreach ( var mode in new[] { KeepMode.Front, KeepMode.Back, KeepMode.Both } )
+				{
+					if ( KeepButton( mode ) && mode != _keep )
+					{
+						_keep = mode;
+						Preview();
+					}
+					GUILayout.FlexibleSpace();
+				}
 			}
+			GUILayout.Space( 4 );
 
 			var cap = GUILayout.Toggle( _cap, "Cap new surfaces" );
 			if ( cap != _cap )
@@ -96,6 +118,60 @@ namespace HammerUnity.EditorTools
 				_cap = cap;
 				Preview();
 			}
+		}
+
+		static readonly Color Kept = new( 0.2f, 0.8f, 0.25f );
+
+		/// <summary>
+		/// Hammer's keep mode icons: the cut down the middle, the kept half (or both) in green.
+		/// </summary>
+		static bool KeepButton( KeepMode mode )
+		{
+			var tip = mode switch { KeepMode.Front => "Keep the front", KeepMode.Back => "Keep the back", _ => "Keep both (split)" };
+			var rect = GUILayoutUtility.GetRect( 34, 26, GUILayout.Width( 34 ), GUILayout.Height( 26 ) );
+			var clicked = GUI.Button( rect, new GUIContent( "", tip ), EditorStyles.miniButton );
+
+			if ( Event.current.type == EventType.Repaint )
+			{
+				if ( mode == _keep )
+				{
+					var border = new Color( 0.95f, 0.55f, 0.15f );
+					EditorGUI.DrawRect( new Rect( rect.x, rect.y, rect.width, 1 ), border );
+					EditorGUI.DrawRect( new Rect( rect.x, rect.yMax - 1, rect.width, 1 ), border );
+					EditorGUI.DrawRect( new Rect( rect.x, rect.y, 1, rect.height ), border );
+					EditorGUI.DrawRect( new Rect( rect.xMax - 1, rect.y, 1, rect.height ), border );
+				}
+
+				var gone = new Color( 0.5f, 0.5f, 0.5f, 0.5f );
+				var left = new Rect( rect.center.x - 8, rect.y + 6, 6, rect.height - 12 );
+				var right = new Rect( rect.center.x + 2, rect.y + 6, 6, rect.height - 12 );
+				EditorGUI.DrawRect( left, mode == KeepMode.Front ? gone : Kept );
+				EditorGUI.DrawRect( right, mode == KeepMode.Back ? gone : Kept );
+				EditorGUI.DrawRect( new Rect( rect.center.x - 0.5f, rect.y + 4, 1, rect.height - 8 ), Color.white );
+			}
+
+			return clicked;
+		}
+
+		public void ToggleCaps()
+		{
+			_cap = !_cap;
+			Preview();
+			HammerViews.RepaintAll();
+		}
+
+		/// <summary>
+		/// G / F: turn the cut line about its middle, in the surface, by the angle snap.
+		/// </summary>
+		public void RotatePlane( int direction )
+		{
+			if ( !_hasHitPlane || (_point2 - _point1).sqrMagnitude < 1e-10f ) return;
+			var mid = (_point1 + _point2) * 0.5f;
+			var turn = Quaternion.AngleAxis( direction * HammerSettings.AngleSnap, _hitNormal );
+			_point1 = mid + turn * (_point1 - mid);
+			_point2 = mid + turn * (_point2 - mid);
+			Preview();
+			HammerViews.RepaintAll();
 		}
 
 		public void CycleKeepMode()
@@ -113,19 +189,29 @@ namespace HammerUnity.EditorTools
 			if ( e.type == EventType.Layout )
 				HandleUtility.AddDefaultControl( id );
 
+			// The plane first, so the line and handles sit on top of it
+			if ( e.type == EventType.Repaint )
+				Draw();
+
 			// Endpoint handles, draggable within the surface plane
 			if ( _hasPlane && !_dragging )
 			{
-				var size = HammerGUI.HandleSize( _point1 ) * 0.06f;
 				EditorGUI.BeginChangeCheck();
-				var p1 = HammerGizmos.Slider2D( _point1, _hitNormal, size, Handles.DotHandleCap );
-				var p2 = HammerGizmos.Slider2D( _point2, _hitNormal, size, Handles.DotHandleCap );
+				Handles.color = Cyan;
+				var p1 = HammerGizmos.Slider2D( _point1, _hitNormal, HandleSize( _point1 ), Handle );
+				var p2 = HammerGizmos.Slider2D( _point2, _hitNormal, HandleSize( _point2 ), Handle );
 				if ( EditorGUI.EndChangeCheck() )
 				{
 					_point1 = SnapInPlane( p1 );
 					_point2 = SnapInPlane( p2 );
 					Preview();
 				}
+			}
+			else if ( _hasHitPlane && e.type == EventType.Repaint )
+			{
+				Handles.color = Cyan;
+				Handle( 0, _point1, Quaternion.identity, HandleSize( _point1 ), EventType.Repaint );
+				Handle( 0, _point2, Quaternion.identity, HandleSize( _point2 ), EventType.Repaint );
 			}
 
 			switch ( e.GetTypeForControl( id ) )
@@ -174,9 +260,19 @@ namespace HammerUnity.EditorTools
 					e.Use();
 					break;
 			}
+		}
 
-			if ( e.type == EventType.Repaint )
-				Draw();
+		static float HandleSize( Vector3 p ) => HammerGUI.HandleSize( p ) * 0.045f;
+
+		/// <summary>A cyan square with a dark rim, like Hammer's clip handles.</summary>
+		static void Handle( int id, Vector3 position, Quaternion rotation, float size, EventType type )
+		{
+			if ( type != EventType.Repaint ) return;
+			var color = Handles.color;
+			Handles.color = new Color( 0.05f, 0.15f, 0.2f );
+			Handles.DotHandleCap( id, position, rotation, size * 1.3f, type );
+			Handles.color = color;
+			Handles.DotHandleCap( id, position, rotation, size, type );
 		}
 
 		static Vector3 Perpendicular( Vector3 n ) => Mathf.Abs( Vector3.Dot( n, Vector3.up ) ) > 0.9f ? Vector3.right : Vector3.Cross( n, Vector3.up ).normalized;
@@ -293,29 +389,58 @@ namespace HammerUnity.EditorTools
 			}
 		}
 
+		/// <summary>
+		/// Hammer's look: the cutting plane as a see-through sheet through the meshes, and the
+		/// drawn line along the surface in cyan.
+		/// </summary>
 		void Draw()
 		{
 			Handles.zTest = UnityEngine.Rendering.CompareFunction.Always;
+			if ( !_hasHitPlane ) return;
 
-			if ( _hasHitPlane )
+			var line = _point2 - _point1;
+			var length = line.magnitude;
+			if ( length > 1e-5f )
 			{
-				Handles.color = Color.white;
-				Handles.DrawAAPolyLine( 4.0f, _point1, _point2 );
+				var along = line / length;
+				var up = _hitNormal;
 
-				if ( TryGetPlane( out var point, out var normal ) )
+				// Wide and tall enough to cover what's being cut, and a little more
+				float a0 = 0, a1 = length, u0 = -length * 0.5f, u1 = length * 0.5f;
+				var any = false;
+				foreach ( var t in _targets )
 				{
-					// Show which side survives
-					var mid = (_point1 + _point2) * 0.5f;
-					var arrow = (_keep == KeepMode.Back ? 1 : -1) * normal;
-					Handles.color = new Color( 1.0f, 0.92f, 0.15f );
-					if ( _keep != KeepMode.Both )
-						Handles.ArrowHandleCap( 0, mid, Quaternion.LookRotation( arrow ), HammerGUI.HandleSize( mid ) * 0.6f, EventType.Repaint );
+					var r = t.Component != null ? t.Component.GetComponent<Renderer>() : null;
+					if ( r == null ) continue;
+					var b = r.bounds;
+					for ( int i = 0; i < 8; i++ )
+					{
+						var corner = b.center + Vector3.Scale( b.extents, new Vector3( (i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1 ) );
+						var d = corner - _point1;
+						var a = Vector3.Dot( d, along );
+						var u = Vector3.Dot( d, up );
+						if ( !any ) { u0 = u1 = u; any = true; }
+						a0 = Mathf.Min( a0, a );
+						a1 = Mathf.Max( a1, a );
+						u0 = Mathf.Min( u0, u );
+						u1 = Mathf.Max( u1, u );
+					}
 				}
+				var margin = Mathf.Max( a1 - a0, u1 - u0 ) * 0.08f;
+				a0 -= margin; a1 += margin; u0 -= margin; u1 += margin;
+				var quad = new[]
+				{
+					_point1 + along * a0 + up * u0,
+					_point1 + along * a1 + up * u0,
+					_point1 + along * a1 + up * u1,
+					_point1 + along * a0 + up * u1,
+				};
+				Handles.color = Color.white;
+				Handles.DrawSolidRectangleWithOutline( quad, new Color( 0.85f, 0.92f, 0.95f, 0.22f ), new Color( 1, 1, 1, 0.6f ) );
 			}
 
-			Handles.color = new Color( 1.0f, 0.92f, 0.15f );
-			foreach ( var (a, b) in _newEdges )
-				Handles.DrawAAPolyLine( 3.0f, a, b );
+			Handles.color = Cyan;
+			Handles.DrawAAPolyLine( 4.0f, _point1, _point2 );
 		}
 
 		public override void Apply() => ApplyInternal( true );

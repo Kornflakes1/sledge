@@ -472,8 +472,12 @@ namespace HammerUnity.EditorTools
 
 		// ─────────────────────────────── Meshes ───────────────────────────────
 
-		Vector3? _objectPivot;
-		int _objectPivotFor;
+		Vector3? _objectPivot
+		{
+			get => PivotState.HasObjectPivot ? PivotState.ObjectPivot : null;
+			set { PivotState.HasObjectPivot = value.HasValue; PivotState.ObjectPivot = value ?? default; }
+		}
+		int _objectPivotFor { get => PivotState.ObjectPivotFor; set => PivotState.ObjectPivotFor = value; }
 		int _pivotStep;
 
 		/// <summary>
@@ -484,7 +488,12 @@ namespace HammerUnity.EditorTools
 		{
 			if ( _objectPivot.HasValue && _objectPivotFor == UnityEditor.Selection.activeInstanceID )
 				return _objectPivot.Value;
-			_objectPivot = null;
+			if ( _objectPivot.HasValue )
+			{
+				// A new selection gets its own pivot (recorded, so undoing the selection brings it back)
+				RecordPivot( "Selection" );
+				_objectPivot = null;
+			}
 
 			// Unity's own handle position, worked out here: it's only kept up to date while a
 			// scene view is drawing (with none open it's infinite)
@@ -502,6 +511,7 @@ namespace HammerUnity.EditorTools
 
 		void SetObjectPivot( Vector3? pivot )
 		{
+			RecordPivot( pivot.HasValue ? "Move Pivot" : "Clear Pivot" );
 			_objectPivot = pivot;
 			_objectPivotFor = UnityEditor.Selection.activeInstanceID;
 			HammerViews.RepaintAll();

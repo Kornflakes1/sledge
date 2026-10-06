@@ -84,6 +84,12 @@ namespace HammerUnity.EditorTools
 		public override string Title => "Edge Cut";
 		public override string Help => "Click on vertices, edges and faces to draw the cut. Enter applies, Esc cancels.";
 
+		public override (string Key, string Operation)[] Keys => new[]
+		{
+			("Enter", "Apply Cut"),
+			("Esc", "Cancel Cut"),
+		};
+
 		public static void Open( HammerMeshTool tool ) => tool.BeginSubTool( new EdgeCutTool() );
 
 		/// <summary>
@@ -230,33 +236,109 @@ namespace HammerUnity.EditorTools
 			return default;
 		}
 
+		static readonly Color PointColor = new( 1.0f, 0.92f, 0.15f );
+		static readonly Color PreviewColor = new( 1.0f, 0.62f, 0.1f );
+
+		/// <summary>
+		/// Hammer's look: the edge under the cursor in green with how far the point is from each
+		/// end, a faint orange guide straight across the face, and the cut so far in yellow.
+		/// </summary>
 		void Draw()
 		{
 			Handles.zTest = UnityEngine.Rendering.CompareFunction.Always;
-			var color = new Color( 1.0f, 0.92f, 0.15f );
 
-			for ( int i = 0; i < _points.Count; i++ )
-			{
-				var p = _points[i].WorldPosition;
-				Handles.color = color;
-				Handles.DotHandleCap( 0, p, Quaternion.identity, HammerGUI.HandleSize( p ) * 0.04f, EventType.Repaint );
-
-				if ( i > 0 )
-					Handles.DrawAAPolyLine( 3.0f, _points[i - 1].WorldPosition, p );
-			}
+			Handles.color = PointColor;
+			for ( int i = 1; i < _points.Count; i++ )
+				Handles.DrawAAPolyLine( 3.0f, _points[i - 1].WorldPosition, _points[i].WorldPosition );
 
 			if ( _preview.IsValid )
 			{
 				var p = _preview.WorldPosition;
-				Handles.color = Color.white;
-				Handles.DotHandleCap( 0, p, Quaternion.identity, HammerGUI.HandleSize( p ) * 0.035f, EventType.Repaint );
+
+				if ( _preview.Edge.IsValid )
+				{
+					_preview.Edge.GetWorldPoints( out var a, out var b );
+					Handles.color = new Color( 0.2f, 1.0f, 0.2f );
+					Handles.DrawAAPolyLine( 4.0f, a, b );
+					DrawPerpendicularGuide( _preview, a, b );
+				}
 
 				if ( _points.Count > 0 )
 				{
-					Handles.color = new Color( 1, 1, 1, 0.6f );
-					Handles.DrawDottedLine( _points[^1].WorldPosition, p, 4.0f );
+					Handles.color = PointColor;
+					Handles.DrawAAPolyLine( 3.0f, _points[^1].WorldPosition, p );
+				}
+
+				Square( p, PreviewColor, 0.045f );
+
+				if ( _preview.Edge.IsValid && !_preview.Vertex.IsValid )
+				{
+					// Distance to each end of the edge, in Hammer units
+					_preview.Edge.GetWorldPoints( out var a, out var b );
+					var toA = Vector3.Distance( p, a ) / SourceSpace.UnitScale;
+					var toB = Vector3.Distance( p, b ) / SourceSpace.UnitScale;
+					HammerGUI.OutlinedLabel( p, $"({toA:F0} : {toB:F0})", Color.white, 12 );
+				}
+				else if ( _points.Count > 0 && !_preview.Vertex.IsValid )
+				{
+					var length = Vector3.Distance( _points[^1].WorldPosition, p ) / SourceSpace.UnitScale;
+					HammerGUI.OutlinedLabel( p, $"{length:F0}", Color.white, 12 );
 				}
 			}
+
+			foreach ( var point in _points )
+				Square( point.WorldPosition, PointColor, 0.032f );
+		}
+
+		/// <summary>A square with a dark rim.</summary>
+		static void Square( Vector3 p, Color color, float size )
+		{
+			var s = HammerGUI.HandleSize( p ) * size;
+			Handles.color = new Color( 0.1f, 0.08f, 0.02f );
+			Handles.DotHandleCap( 0, p, Quaternion.identity, s * 1.3f, EventType.Repaint );
+			Handles.color = color;
+			Handles.DotHandleCap( 0, p, Quaternion.identity, s, EventType.Repaint );
+		}
+
+		/// <summary>
+		/// From the point, straight across the face (square to the edge) to the far side: where a
+		/// cut from here would go if carried on.
+		/// </summary>
+		static void DrawPerpendicularGuide( CutPoint point, Vector3 a, Vector3 b )
+		{
+			var component = point.Component;
+			var mesh = component.Mesh;
+			var face = point.Face.Handle;
+			mesh.ComputeFaceNormal( face, out var n );
+			var normal = component.SourceDirectionToWorld( n ).normalized;
+			var corners = mesh.GetFaceVertices( face ).Select( v => component.SourceToWorld( mesh.GetVertexPosition( v ) ) ).ToList();
+			if ( corners.Count < 3 ) return;
+
+			var across = Vector3.Cross( normal, (b - a).normalized ).normalized;
+			var start = point.WorldPosition;
+			var center = corners.Aggregate( Vector3.zero, ( x, y ) => x + y ) / corners.Count;
+			if ( Vector3.Dot( center - start, across ) < 0 ) across = -across;
+
+			// The nearest face side the guide meets
+			var reach = 0.0f;
+			foreach ( var c in corners ) reach = Mathf.Max( reach, Vector3.Dot( c - start, across ) );
+			for ( int i = 0; i < corners.Count; i++ )
+			{
+				var p0 = corners[i];
+				var p1 = corners[(i + 1) % corners.Count];
+				var side = p1 - p0;
+				var sideNormal = Vector3.Cross( normal, side );
+				var denom = Vector3.Dot( sideNormal, across );
+				if ( Mathf.Abs( denom ) < 1e-8f ) continue;
+				var t = Vector3.Dot( sideNormal, p0 - start ) / denom;
+				if ( t <= 1e-4f || t >= reach ) continue;
+				var hit = start + across * t;
+				var along = Vector3.Dot( hit - p0, side ) / Mathf.Max( side.sqrMagnitude, 1e-10f );
+				if ( along >= -1e-3f && along <= 1 + 1e-3f ) reach = t;
+			}
+
+			Handles.color = new Color( 1.0f, 0.6f, 0.15f, 0.5f );
+			Handles.DrawAAPolyLine( 2.0f, start, start + across * reach );
 		}
 
 		public override void Apply()

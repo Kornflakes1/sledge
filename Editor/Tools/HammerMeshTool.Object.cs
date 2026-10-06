@@ -79,7 +79,11 @@ namespace HammerUnity.EditorTools
 							s.transform.position = s.position + delta;
 
 						// A placed pivot travels with the objects
-						if ( _objectPivot.HasValue ) _objectPivot = _objectPivotStart + delta;
+						if ( _objectPivot.HasValue )
+						{
+							RecordPivot( "Move" );
+							_objectPivot = _objectPivotStart + delta;
+						}
 					}
 					break;
 				}

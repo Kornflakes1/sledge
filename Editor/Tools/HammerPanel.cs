@@ -315,7 +315,8 @@ namespace HammerUnity.EditorTools
 		static void SubToolGUI( SubTool sub )
 		{
 			Header( sub.Title, null, "" );
-			EditorGUILayout.LabelField( sub.Help, EditorStyles.wordWrappedMiniLabel );
+			if ( sub.Keys != null ) KeyTable( sub.Keys );
+			else EditorGUILayout.LabelField( sub.Help, EditorStyles.wordWrappedMiniLabel );
 
 			Section( "Settings", () => sub.TrackSettings( sub.OnOverlayGUI ) );
 
@@ -324,6 +325,36 @@ namespace HammerUnity.EditorTools
 				Button( "Apply", "Enter", sub.Apply );
 				Button( "Cancel", "Esc", sub.Cancel );
 			}
+		}
+
+		static GUIStyle _keyStyle;
+
+		/// <summary>
+		/// Hammer's Key / Operation table for a tool.
+		/// </summary>
+		static void KeyTable( (string Key, string Operation)[] keys )
+		{
+			_keyStyle ??= new GUIStyle( EditorStyles.miniLabel ) { normal = { textColor = new Color( 0.95f, 0.62f, 0.2f ) } };
+			GUILayout.Space( 4 );
+			var head = GUILayoutUtility.GetRect( 0, 20, GUILayout.ExpandWidth( true ) );
+			var keyWidth = Mathf.Min( 110, head.width * 0.4f );
+			if ( Event.current.type == EventType.Repaint )
+			{
+				EditorGUI.DrawRect( head, HeaderBack );
+				EditorGUI.DrawRect( new Rect( head.x + keyWidth, head.y, 1, head.height ), SectionBack );
+			}
+			GUI.Label( new Rect( head.x, head.y, keyWidth, head.height ), "Key", EditorStyles.centeredGreyMiniLabel );
+			GUI.Label( new Rect( head.x + keyWidth, head.y, head.width - keyWidth, head.height ), "Operation", EditorStyles.centeredGreyMiniLabel );
+
+			for ( int i = 0; i < keys.Length; i++ )
+			{
+				var row = GUILayoutUtility.GetRect( 0, 18, GUILayout.ExpandWidth( true ) );
+				if ( Event.current.type == EventType.Repaint )
+					EditorGUI.DrawRect( row, i % 2 == 0 ? SectionBack : new Color( 0.13f, 0.13f, 0.13f ) );
+				GUI.Label( new Rect( row.x + 6, row.y, keyWidth - 6, row.height ), $"[{keys[i].Key}]", _keyStyle );
+				GUI.Label( new Rect( row.x + keyWidth + 6, row.y, row.width - keyWidth - 6, row.height ), keys[i].Operation, EditorStyles.miniLabel );
+			}
+			GUILayout.Space( 4 );
 		}
 
 		public static void GridGUI()

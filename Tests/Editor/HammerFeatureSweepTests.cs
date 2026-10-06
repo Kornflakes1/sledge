@@ -564,7 +564,7 @@ namespace HammerUnity.Tests
 
 			Select( EditMode.Face, FacingFaces( c, new S.Vector3( 1, 0, 0 ) ) );
 			var start = _tool.SelectedFaces.First().CenterWorld;
-			typeof( HammerMeshTool ).GetField( "_customPivot", Any ).SetValue( _tool, (Vector3?)center );
+			typeof( HammerMeshTool ).GetProperty( "_customPivot", Any ).SetValue( _tool, (Vector3?)center );
 			typeof( HammerMeshTool ).GetField( "_pivotSelectionVersion", Any ).SetValue( _tool, _tool.Selection.Version );
 			Step( "Shift+rotate round the pivot", m, () => Rotate( 15, extrude: true, around: center ) );
 
@@ -587,6 +587,48 @@ namespace HammerUnity.Tests
 			Assert.That( _tool.HasCustomPivot, "the pivot survived all of it" );
 
 			static Vector3 Flat( Vector3 v ) => new( v.x, 0, v.z );
+		}
+
+		[Test]
+		public void UndoStepsThePivotBack()
+		{
+			// Place the pivot, move the face (the pivot goes along), place it again: each undo
+			// takes one of those back, rather than throwing the pivot away
+			_tool.MoveMode = MoveMode.Position;
+			var c = Box();
+			Select( EditMode.Face, new[] { TopFace( c ) } );
+			Vector3? Pivot() => (Vector3?)typeof( HammerMeshTool ).GetProperty( "_customPivot", Any ).GetValue( _tool );
+			var top = Top( c );
+
+			var p1 = new Vector3( 1, 2, 3 );
+			Undo.IncrementCurrentGroup();
+			_tool.ScriptedPivot( p1 );
+			Undo.IncrementCurrentGroup();
+			EndFrame();
+			_tool.ScriptedMove( Vector3.up );
+			EndFrame();
+			Assert.That( Pivot(), Is.EqualTo( p1 + Vector3.up ), "the move took the pivot along" );
+			var p2 = new Vector3( -4, 0, 2 );
+			_tool.ScriptedPivot( p2 );
+			Undo.IncrementCurrentGroup();
+			EndFrame();
+
+			Undo.PerformUndo();
+			EndFrame();
+			Assert.That( Pivot(), Is.EqualTo( p1 + Vector3.up ), "undo put the pivot back where the move left it" );
+			Assert.That( Top( c ), Is.Not.EqualTo( top ), "and left the move alone" );
+
+			Undo.PerformUndo();
+			EndFrame();
+			Assert.That( Pivot(), Is.EqualTo( p1 ), "undoing the move took the pivot back too" );
+			Assert.That( Top( c ), Is.EqualTo( top ).Within( 1e-4f ) );
+
+			Undo.PerformUndo();
+			EndFrame();
+			Assert.That( Pivot(), Is.Null, "then the first placement" );
+
+			for ( int i = 0; i < 3; i++ ) { Undo.PerformRedo(); EndFrame(); }
+			Assert.That( Pivot(), Is.EqualTo( p2 ), "redo brings it all back" );
 		}
 
 		[Test]

@@ -48,13 +48,48 @@ namespace HammerUnity.EditorTools
 		/// Set with the pivot tool: where rotate and scale turn around. Cleared when the
 		/// selection changes.
 		/// </summary>
-		Vector3? _customPivot;
+		Vector3? _customPivot
+		{
+			get => PivotState.HasPivot ? PivotState.Pivot : null;
+			set { PivotState.HasPivot = value.HasValue; PivotState.Pivot = value ?? default; }
+		}
 		int _pivotSelectionVersion = -1;
+
+		/// <summary>
+		/// Where the pivots live, so moving one is a step in Unity's undo history like any other
+		/// edit (and undoing a move that carried the pivot along takes it back too).
+		/// </summary>
+		sealed class PivotUndoState : ScriptableObject
+		{
+			public bool HasPivot;
+			public Vector3 Pivot;
+			public bool HasObjectPivot;
+			public Vector3 ObjectPivot;
+			public int ObjectPivotFor;
+		}
+
+		PivotUndoState _pivotState;
+		PivotUndoState PivotState
+		{
+			get
+			{
+				if ( _pivotState == null )
+				{
+					_pivotState = ScriptableObject.CreateInstance<PivotUndoState>();
+					_pivotState.hideFlags = HideFlags.HideAndDontSave;
+				}
+				return _pivotState;
+			}
+		}
+
+		/// <summary>Put the pivots as they are now into the current undo step, before changing them.</summary>
+		void RecordPivot( string name = "Move Pivot" ) => Undo.RecordObject( PivotState, name );
 
 		public bool HasCustomPivot => _customPivot.HasValue;
 
 		public void ClearPivot()
 		{
+			if ( _customPivot.HasValue ) RecordPivot( "Clear Pivot" );
 			_customPivot = null;
 			HammerViews.RepaintAll();
 		}
@@ -63,11 +98,7 @@ namespace HammerUnity.EditorTools
 		{
 			HammerTrace.Log( "TransformHandleGUI" );
 
-			if ( _pivotSelectionVersion != Selection.Version && !_dragging )
-			{
-				_customPivot = null;
-				_pivotSelectionVersion = Selection.Version;
-			}
+			ForgetPivotIfSelectionChanged();
 
 			if ( _moveMode == MoveMode.Pivot )
 			{
@@ -211,12 +242,25 @@ namespace HammerUnity.EditorTools
 			if ( _mode == EditMode.Object )
 				return (ObjectPivot(), Tools.pivotRotation == PivotRotation.Local ? Tools.handleRotation : Workplane.Rotation);
 
-			if ( _pivotSelectionVersion != Selection.Version && !_dragging )
-			{
-				_customPivot = null;
-				_pivotSelectionVersion = Selection.Version;
-			}
+			ForgetPivotIfSelectionChanged();
 			return (_customPivot ?? SelectionCenter(), SelectionBasis());
+		}
+
+		/// <summary>
+		/// A new selection gets its own pivot. Recorded with the selection change, so undoing
+		/// that brings the old pivot back with the old selection.
+		/// </summary>
+		void ForgetPivotIfSelectionChanged()
+		{
+			if ( _pivotSelectionVersion == Selection.Version || _dragging )
+				return;
+
+			if ( _customPivot.HasValue )
+			{
+				RecordPivot( "Selection" );
+				_customPivot = null;
+			}
+			_pivotSelectionVersion = Selection.Version;
 		}
 
 		/// <summary>
@@ -302,6 +346,7 @@ namespace HammerUnity.EditorTools
 			else
 			{
 				CurrentPivot();
+				RecordPivot();
 				_customPivot = point;
 				_pivotSelectionVersion = Selection.Version;
 			}
@@ -377,6 +422,7 @@ namespace HammerUnity.EditorTools
 			{
 				var snap = HammerSettings.GridSnap ^ (Event.current.control || Event.current.command);
 				var delta = moved - position;
+				RecordPivot();
 				_customPivot = snap ? HammerSettings.SnapWorld( moved, Mathf.Abs( delta.x ) > 1e-6f, Mathf.Abs( delta.y ) > 1e-6f, Mathf.Abs( delta.z ) > 1e-6f ) : moved;
 				_pivotSelectionVersion = Selection.Version;
 			}
@@ -437,7 +483,11 @@ namespace HammerUnity.EditorTools
 			// The drag's own selection change (an extrude selects the new faces) mustn't throw
 			// away a pivot the user placed: rotating round it again, or Shift+G, needs it.
 			// Moving takes the pivot along.
-			if ( _customPivot.HasValue && _moveMode == MoveMode.Position ) _customPivot = _handlePosition;
+			if ( _customPivot.HasValue && _moveMode == MoveMode.Position )
+			{
+				RecordPivot( "Move" );
+				_customPivot = _handlePosition;
+			}
 			_pivotSelectionVersion = Selection.Version;
 			Undo.FlushUndoRecordObjects();
 			Undo.IncrementCurrentGroup();

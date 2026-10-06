@@ -21,6 +21,11 @@ namespace HammerUnity.EditorTools
 		/// </summary>
 		public virtual string Help => "Enter to apply, Esc to cancel.";
 
+		/// <summary>
+		/// Hammer's key table for the tool, shown in place of <see cref="Help"/> when set.
+		/// </summary>
+		public virtual (string Key, string Operation)[] Keys => null;
+
 		public virtual void OnEnable() { }
 
 		public abstract void OnViewGUI( HammerView view );

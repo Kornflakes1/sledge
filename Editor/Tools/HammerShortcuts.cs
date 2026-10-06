@@ -307,7 +307,13 @@ namespace HammerUnity.EditorTools
 		static void SnapToGrid() => Run( t => t.SnapToGrid() );
 
 		[Shortcut( "Hammer/Bevel · Flip (F)", typeof( HammerWindow ), KeyCode.F )]
-		static void KeyF() => ByMode(
+		static void KeyF()
+		{
+			if ( Tool?.SubTool is ClipTool clip ) { clip.RotatePlane( -1 ); return; }
+			KeyFByMode();
+		}
+
+		static void KeyFByMode() => ByMode(
 			vertex: () => Tool.BevelVertices(),
 			edge: () => Tool.QuickBevelEdges(),
 			face: () => Tool.FlipFaces(),
@@ -368,6 +374,7 @@ namespace HammerUnity.EditorTools
 		[Shortcut( "Hammer/Select Ring · Thicken (G)", typeof( HammerWindow ), KeyCode.G )]
 		static void KeyG()
 		{
+			if ( Tool?.SubTool is ClipTool clip ) { clip.RotatePlane( 1 ); return; }
 			if ( Tool?.Mode == EditMode.Edge ) View( t => t.SelectRing() );
 			else ByMode( face: () => Tool.ThickenFaces() );
 		}
@@ -455,6 +462,12 @@ namespace HammerUnity.EditorTools
 				clip.CycleKeepMode();
 			else if ( tool.Mode is EditMode.Face or EditMode.Object )
 				EditorTools.ClipTool.Open( tool );
+		}
+
+		[Shortcut( "Hammer/Clip · Toggle Create Caps", typeof( HammerWindow ), KeyCode.X, ShortcutModifiers.Action | ShortcutModifiers.Shift )]
+		static void ClipToggleCaps()
+		{
+			if ( Tool?.SubTool is ClipTool clip ) clip.ToggleCaps();
 		}
 
 		[Shortcut( "Hammer/Mirror Tool", typeof( HammerWindow ), KeyCode.F, ShortcutModifiers.Shift )]

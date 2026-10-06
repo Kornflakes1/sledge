@@ -207,6 +207,8 @@ namespace HammerUnity.EditorTools
 
 			Selection.SyncFromUndo();
 			Selection.RemoveInvalid();
+			// The pivot came back with the undo step: the restored selection mustn't clear it
+			_pivotSelectionVersion = Selection.Version;
 			HammerViews.RepaintAll();
 		}
 

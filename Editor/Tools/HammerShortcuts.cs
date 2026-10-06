@@ -246,6 +246,7 @@ namespace HammerUnity.EditorTools
 		{
 			// While flying in the 3D view (right mouse held), E is "up"
 			if ( HammerWindow.Flying ) { HammerWindow.FlyKeyDown( KeyCode.E ); return; }
+			if ( Tool?.SubTool is EdgeCutTool cut ) { cut.ToggleUniformOffset(); return; }
 			View( t => t.MoveMode = MoveMode.Scale );
 		}
 
@@ -310,6 +311,7 @@ namespace HammerUnity.EditorTools
 		static void KeyF()
 		{
 			if ( Tool?.SubTool is ClipTool clip ) { clip.RotatePlane( -1 ); return; }
+			if ( Tool?.SubTool is EdgeCutTool cut ) { cut.ToggleFlipUniformOffset(); return; }
 			KeyFByMode();
 		}
 
@@ -326,7 +328,13 @@ namespace HammerUnity.EditorTools
 			obj: () => Tool.MergeMeshes() );
 
 		[Shortcut( "Hammer/Connect (V)", typeof( HammerWindow ), KeyCode.V )]
-		static void KeyV() => ByMode(
+		static void KeyV()
+		{
+			if ( Tool?.SubTool is EdgeCutTool cut ) { cut.ToggleLoopMode(); return; }
+			KeyVByMode();
+		}
+
+		static void KeyVByMode() => ByMode(
 			vertex: () => Tool.ConnectVertices(),
 			edge: () => Tool.ConnectEdges() );
 
@@ -342,7 +350,13 @@ namespace HammerUnity.EditorTools
 			obj: () => Tool.SeparateComponents() );
 
 		[Shortcut( "Hammer/Snap To Vertex · Bridge (B)", typeof( HammerWindow ), KeyCode.B )]
-		static void KeyB() => ByMode(
+		static void KeyB()
+		{
+			if ( Tool?.SubTool is EdgeCutTool cut ) { cut.PlaceCut(); return; }
+			KeyBByMode();
+		}
+
+		static void KeyBByMode() => ByMode(
 			vertex: () => Tool.SnapToLastVertex(),
 			edge: () => Tool.BridgeEdges() );
 
@@ -375,6 +389,7 @@ namespace HammerUnity.EditorTools
 		static void KeyG()
 		{
 			if ( Tool?.SubTool is ClipTool clip ) { clip.RotatePlane( 1 ); return; }
+			if ( Tool?.SubTool is EdgeCutTool cut ) { cut.ToggleSelectionOnly(); return; }
 			if ( Tool?.Mode == EditMode.Edge ) View( t => t.SelectRing() );
 			else ByMode( face: () => Tool.ThickenFaces() );
 		}

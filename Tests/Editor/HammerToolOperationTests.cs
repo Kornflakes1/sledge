@@ -360,6 +360,46 @@ namespace HammerUnity.Tests
 			Assert.That( mesh.FaceHandles.Count(), Is.EqualTo( 7 ) );
 			Assert.That( _tool.SubTool, Is.Null );
 		}
+
+		[Test]
+		public void LoopCutGoesRightRound()
+		{
+			// V mode: one edge of the top face, a quarter along; the loop goes round the four
+			// faces that edge's ring crosses and comes back closed
+			var c = _go.GetComponent<HammerMesh>();
+			var mesh = c.Mesh;
+			var top = mesh.FaceHandles.First( h => { mesh.ComputeFaceNormal( h, out var n ); return n.z > 0.9f; } );
+			var face = new MeshFace( c, top );
+			var edge = new MeshEdge( c, mesh.GetFaceEdges( top )[0] );
+			edge.GetWorldPoints( out var a, out var b );
+			var along = (b - a).normalized;
+
+			var cut = new EdgeCutTool();
+			_tool.BeginSubTool( cut );
+			try
+			{
+				EdgeCutTool.SetLoopOptions( true, false, false, false );
+				var loop = cut.LoopThrough( face, edge, Vector3.Lerp( a, b, 0.25f ), out var closed );
+				Assert.That( closed, "the loop closes" );
+				Assert.That( loop.Count, Is.EqualTo( 4 ) );
+				foreach ( var p in loop )
+					Assert.That( Vector3.Dot( p - a, along ), Is.EqualTo( Vector3.Dot( b - a, along ) * 0.25f ).Within( 1e-4f ), "every cut is a quarter along" );
+
+				EdgeCutTool.SetLoopOptions( true, true, true, false );
+				var flipped = cut.LoopThrough( face, edge, Vector3.Lerp( a, b, 0.25f ), out closed );
+				Assert.That( closed && flipped.Count == 4, "uniform offset makes the same loop on a box" );
+
+				EdgeCutTool.SetLoopOptions( true, false, false, false );
+				Assert.That( cut.CutLoop( face, edge, Vector3.Lerp( a, b, 0.25f ) ), "cut" );
+				Assert.That( mesh.FaceHandles.Count(), Is.EqualTo( 10 ), "the four faces round the loop are each split" );
+				Assert.That( _tool.SubTool, Is.SameAs( cut ), "still in the tool for the next loop" );
+			}
+			finally
+			{
+				EdgeCutTool.SetLoopOptions( false, false, false, false );
+			}
+			cut.Cancel();
+		}
 	}
 }
 

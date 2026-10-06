@@ -1,0 +1,9 @@
+{
+  "name": "com.hammerunity.meshtools",
+  "displayName": "Hammer Mesh Tools",
+  "version": "0.1.0",
+  "unity": "6000.0",
+  "description": "Source 2 Hammer-style polygon mesh editing for Unity. The mesh core (half-edge mesh, PolygonMesh, bevel/boolean/clip/inset/UV operations) is ported from s&box by Facepunch Studios (MIT).",
+  "keywords": [ "hammer", "level design", "mesh", "blockout", "s&box" ],
+  "license": "MIT"
+}

@@ -1,0 +1,32 @@
+{
+    "name": "HammerUnity.Tests.Editor",
+    "rootNamespace": "",
+    "references": [
+        "HammerUnity.Runtime",
+        "HammerUnity.Editor",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS",
+        "HAMMER_TEST_FRAMEWORK"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.test-framework",
+            "expression": "1.0.0",
+            "define": "HAMMER_TEST_FRAMEWORK"
+        }
+    ],
+    "noEngineReferences": false
+}

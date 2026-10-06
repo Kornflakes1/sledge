@@ -66,7 +66,6 @@ Everything can be undone with Ctrl+Z. To learn the tools step by step, use
 
 <table>
   <tr>
-    <td><img src="Documentation~/shot-triumph.png" alt="The example garden's Roman arch at the end of a wavy brick path"></td>
     <td><img src="Documentation~/shot-stairs.png" alt="A spiral staircase of turned steps round a column, in the 3D view with Top and Front beside it"></td>
   </tr>
   <tr>

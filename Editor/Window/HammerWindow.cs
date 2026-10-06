@@ -185,12 +185,14 @@ namespace HammerUnity.EditorTools
 
 			// Layout like Source 2 Hammer / s&box: selection modes across the top, tool strip down
 			// the left, then the Tool Properties panel, then the viewports
-			DrawSceneTabs( new Rect( 0, 0, position.width, SceneTabHeight ) );
-			DrawToolbar( new Rect( 0, SceneTabHeight, position.width, ToolbarHeight ) );
+			var top = MenuBarHeight + SceneTabHeight + ToolbarHeight;
+			DrawSceneTabs( new Rect( 0, MenuBarHeight, position.width, SceneTabHeight ) );
+			DrawToolbar( new Rect( 0, MenuBarHeight + SceneTabHeight, position.width, ToolbarHeight ) );
 
 			DrawStatusBar( new Rect( 0, position.height - StatusHeight, position.width, StatusHeight ) );
+			DrawMenuBar( new Rect( 0, 0, position.width, MenuBarHeight ) );
 
-			var body = new Rect( 0, SceneTabHeight + ToolbarHeight, position.width, position.height - SceneTabHeight - ToolbarHeight - StatusHeight );
+			var body = new Rect( 0, top, position.width, position.height - top - StatusHeight );
 			DrawToolStrip( new Rect( 0, body.y, StripWidth, body.height ) );
 
 			_panelWidth = Mathf.Clamp( _panelWidth <= 0 ? 300 : _panelWidth, MinPanelWidth, Mathf.Min( MaxPanelWidth, position.width * 0.6f ) );
@@ -654,6 +656,11 @@ namespace HammerUnity.EditorTools
 			if ( BarToggle( ref x, y, h, HammerIcons.ShowGridIcon, "Show the grid", HammerSettings.ShowGrid ) ) { HammerSettings.ShowGrid = !HammerSettings.ShowGrid; Repaint(); }
 			if ( BarToggle( ref x, y, h, HammerIcons.Wires, "Show mesh edges in the 3D view", HammerSettings.ShowWires ) ) { HammerSettings.ShowWires = !HammerSettings.ShowWires; Repaint(); }
 
+			x += 8;
+			BarDivider( x, rect );
+			x += 9;
+			SnapControls( ref x, rect, y, h );
+
 		}
 
 		/// <summary>
@@ -668,46 +675,55 @@ namespace HammerUnity.EditorTools
 				EditorGUI.DrawRect( new Rect( rect.x, rect.y, rect.width, 1 ), HammerIcons.Divider );
 			}
 
-			var y = rect.y + 3;
-			var h = rect.height - 6;
-
 			// Turns red when the last edit left broken faces
 			var status = StatusStyle;
 			status.normal.textColor = MeshHealth.Warning != null ? new Color( 1.0f, 0.45f, 0.4f ) : new Color( 0.8f, 0.8f, 0.8f );
-			GUI.Label( new Rect( rect.x + StripWidth + 8, rect.y, Mathf.Max( 100, rect.width - StripWidth - 490 ), rect.height ), _tool.StatusText, status );
+			GUI.Label( new Rect( rect.x + StripWidth + 8, rect.y, Mathf.Max( 100, rect.width - StripWidth - 90 ), rect.height ), _tool.StatusText, status );
 
 			var right = rect.xMax - 8;
+			// Frames per second, like Hammer's status bar
+			if ( _fps > 0 )
+				GUI.Label( new Rect( right - 60, rect.y, 60, rect.height ), $"{_fps:0} fps", StatusStyle );
+		}
 
-			var angle = Array.IndexOf( AngleValues, HammerSettings.AngleSnap );
-			var angleRect = new Rect( right - 64, y, 64, h );
-			StatusDropdown( angleRect, Mathf.Max( angle, 0 ), AngleNames, i => HammerSettings.AngleSnap = AngleValues[i] );
-			GUI.Label( new Rect( angleRect.x - 48, rect.y, 44, rect.height ), "Angle:", StatusStyle );
-			right = angleRect.x - 60;
+		/// <summary>
+		/// Grid size, the snap toggles and the angle snap, in the top bar where they're easy to
+		/// find (Hammer keeps them up top too).
+		/// </summary>
+		void SnapControls( ref float left, Rect bar, float y, float h )
+		{
+			var x = left;
+			var label = new GUIStyle( StatusStyle ) { alignment = TextAnchor.MiddleRight };
+			var middle = new Rect( 0, bar.y, 0, bar.height );
+
+			GUI.Label( new Rect( x, middle.y, 34, middle.height ), "Grid", label );
+			x += 38;
+			var grid = Array.FindIndex( GridValues, g => Mathf.Approximately( g, HammerSettings.GridSize ) );
+			StatusDropdown( new Rect( x, bar.y + (bar.height - 20) / 2, 64, 20 ), Mathf.Max( grid, 0 ), GridNames, i => HammerSettings.GridSize = GridValues[i] );
+			x += 72;
 
 			// Hammer's snap buttons: magnet (all snapping), grid, vertices, surfaces
+			var size = h - 4;
 			bool Snap( Texture icon, string tip, bool on, bool enabled = true )
 			{
-				var r = new Rect( right - 30, rect.y + 2, 30, rect.height - 4 );
-				right = r.x - 3;
+				var r = new Rect( x, y + 2, size, size );
+				x += size + 3;
 				return HammerIcons.SnapButton( r, icon, tip, on, enabled );
 			}
 
 			var all = HammerSettings.SnapEnabled;
-			if ( Snap( HammerIcons.SurfaceSnap, "Snap to surfaces: moved objects stand on the surface under the mouse", HammerSettings.SurfaceSnap, all ) ) HammerSettings.SurfaceSnap = !HammerSettings.SurfaceSnap;
-			if ( Snap( HammerIcons.VertexSnap, "Snap to vertices: moves jump to a vertex near the mouse", HammerSettings.VertexSnap, all ) ) HammerSettings.VertexSnap = !HammerSettings.VertexSnap;
-			if ( Snap( HammerIcons.GridSnap, "Snap to grid (hold Ctrl to toggle while dragging)", HammerSettings.GridSnapSetting, all ) ) HammerSettings.GridSnapSetting = !HammerSettings.GridSnapSetting;
 			if ( Snap( HammerIcons.Magnet, "Snapping on/off (the others only work while this is on)", all ) ) HammerSettings.SnapEnabled = !all;
-			GUI.Label( new Rect( right - 42, rect.y, 40, rect.height ), "Snap:", StatusStyle );
-			right -= 52;
+			if ( Snap( HammerIcons.GridSnap, "Snap to grid (hold Ctrl to toggle while dragging)", HammerSettings.GridSnapSetting, all ) ) HammerSettings.GridSnapSetting = !HammerSettings.GridSnapSetting;
+			if ( Snap( HammerIcons.VertexSnap, "Snap to vertices: moves jump to a vertex near the mouse", HammerSettings.VertexSnap, all ) ) HammerSettings.VertexSnap = !HammerSettings.VertexSnap;
+			if ( Snap( HammerIcons.SurfaceSnap, "Snap to surfaces: moved objects stand on the surface under the mouse", HammerSettings.SurfaceSnap, all ) ) HammerSettings.SurfaceSnap = !HammerSettings.SurfaceSnap;
 
-			var grid = Array.FindIndex( GridValues, g => Mathf.Approximately( g, HammerSettings.GridSize ) );
-			var gridRect = new Rect( right - 72, y, 72, h );
-			StatusDropdown( gridRect, Mathf.Max( grid, 0 ), GridNames, i => HammerSettings.GridSize = GridValues[i] );
-			GUI.Label( new Rect( gridRect.x - 40, rect.y, 36, rect.height ), "Grid:", StatusStyle );
-
-			// Frames per second, like Hammer's status bar
-			if ( _fps > 0 )
-				GUI.Label( new Rect( gridRect.x - 40 - 70, rect.y, 60, rect.height ), $"{_fps:0} fps", StatusStyle );
+			x += 6;
+			GUI.Label( new Rect( x, middle.y, 42, middle.height ), "Angle", label );
+			x += 46;
+			var angle = Array.IndexOf( AngleValues, HammerSettings.AngleSnap );
+			StatusDropdown( new Rect( x, bar.y + (bar.height - 20) / 2, 60, 20 ), Mathf.Max( angle, 0 ), AngleNames, i => HammerSettings.AngleSnap = AngleValues[i] );
+			x += 68;
+			left = x;
 		}
 
 		// The window only draws when something changes, so this is how fast it draws while it's

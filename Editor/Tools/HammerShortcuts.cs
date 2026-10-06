@@ -358,7 +358,8 @@ namespace HammerUnity.EditorTools
 
 		static void KeyBByMode() => ByMode(
 			vertex: () => Tool.SnapToLastVertex(),
-			edge: () => Tool.BridgeEdges() );
+			edge: () => Tool.BridgeEdges(),
+			obj: () => Tool.SnapToLastSelected() );
 
 		[Shortcut( "Hammer/Dissolve · Combine (Backspace)", typeof( HammerWindow ), KeyCode.Backspace )]
 		static void KeyBackspace()
@@ -509,13 +510,23 @@ namespace HammerUnity.EditorTools
 		[Shortcut( "Hammer/Bridge Tool", typeof( HammerWindow ), KeyCode.B, ShortcutModifiers.Alt )]
 		static void BridgeTool() => ByMode(
 			edge: () => EditorTools.BridgeTool.Open( Tool ),
-			face: () => EditorTools.BridgeTool.Open( Tool ) );
+			face: () => EditorTools.BridgeTool.Open( Tool ),
+			obj: () => Tool.AlignToLastSelected() );
 
 		[Shortcut( "Hammer/Edge Arch Tool", typeof( HammerWindow ), KeyCode.Y )]
 		static void ArchTool() => ByMode( edge: () => EditorTools.EdgeArchTool.Open( Tool ) );
 
 		[Shortcut( "Hammer/Path Extrude", typeof( HammerWindow ), KeyCode.X, ShortcutModifiers.Alt )]
-		static void PathExtrude() => ByMode( edge: () => EditorTools.PathExtrudeTool.Open( Tool ) );
+		static void PathExtrude() => ByMode( edge: () => EditorTools.PathExtrudeTool.Open( Tool ), obj: () => Tool.PinToTarget() );
+
+		[Shortcut( "Hammer/Set Origin To Target", typeof( HammerWindow ), KeyCode.O, ShortcutModifiers.Alt )]
+		static void SetOriginToTarget() => ByMode( obj: () => Tool.SetOriginToTarget() );
+
+		[Shortcut( "Hammer/Align Selected Objects To Workplane", typeof( HammerWindow ), KeyCode.E, ShortcutModifiers.Alt )]
+		static void AlignSelectedToWorkplane() => ByMode( obj: () => Tool.AlignSelectedToWorkplane() );
+
+		[Shortcut( "Hammer/Align Workplane To Selected Object", typeof( HammerWindow ), KeyCode.Q, ShortcutModifiers.Alt )]
+		static void AlignWorkplaneToSelected() => View( t => t.AlignWorkplaneToSelected() );
 
 		// End: Hammer's Reset Pivot; in Meshes mode, Set Origin to Object Center
 		[Shortcut( "Hammer/Center Origin · Reset Pivot (End)", typeof( HammerWindow ), KeyCode.End )]

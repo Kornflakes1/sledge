@@ -843,9 +843,26 @@ namespace HammerUnity.EditorTools
 			}
 		}
 
+		static readonly (string, string)[] ObjectKeys =
+		{
+			("Ctrl+D", "Set origin to pivot position"),
+			("End", "Set origin to object center"),
+			("Alt+O", "Set origin to target under cursor"),
+			("Alt+T", "Align to target under cursor"),
+			("Alt+R", "Rotate to target under cursor"),
+			("Alt+X", "Pin to target under cursor"),
+			("B", "Snap position to last selected object"),
+			("Alt+B", "Align to last selected object"),
+			("Alt+E", "Align selected objects to workplane"),
+			("Alt+Q", "Align workplane to selected object"),
+			("Ctrl+Num2", "Move object down by tracing"),
+		};
+
 		static void ObjectGUI( HammerMeshTool tool )
 		{
 			var meshes = UnityEditor.Selection.gameObjects.Count( x => x.GetComponent<HammerMesh>() != null );
+
+			Section( "Object Building", () => KeyTable( ObjectKeys ) );
 
 			Section( "Edit", () =>
 			{

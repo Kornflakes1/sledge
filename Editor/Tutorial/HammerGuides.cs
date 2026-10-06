@@ -164,8 +164,12 @@ namespace HammerUnity.EditorTools
 			var e = Event.current;
 			if ( !Showing || e.type == EventType.Repaint || e.type == EventType.Layout ) return;
 			var rect = CurrentRect( area );
-			Contents( rect );
-			if ( (e.isMouse || e.type == EventType.ScrollWheel) && rect.Contains( e.mousePosition ) ) e.Use();
+			if ( !rect.Contains( e.mousePosition ) ) return;
+			// Hit tested by hand: GUI controls here would use up control ids on some events and
+			// not others, and the views' own controls (placing a block...) would stop working
+			if ( e.type == EventType.ScrollWheel && _picking ) _pickScroll.y = Mathf.Max( 0, _pickScroll.y + e.delta.y * 12 );
+			if ( e.type == EventType.MouseUp && e.button == 0 ) Contents( rect, false );
+			if ( e.isMouse || e.type == EventType.ScrollWheel ) e.Use();
 		}
 
 		/// <summary>After the views: check the step, outline what it's about, draw the popup.</summary>
@@ -200,7 +204,7 @@ namespace HammerUnity.EditorTools
 				EditorGUI.DrawRect( new Rect( rect.x + 3, rect.y + 3, rect.width, rect.height ), new Color( 0, 0, 0, 0.35f ) );
 				EditorGUI.DrawRect( rect, new Color( 0.13f, 0.13f, 0.14f, 0.97f ) );
 				EditorGUI.DrawRect( new Rect( rect.x, rect.y, rect.width, 3 ), new Color( 1.0f, 0.6f, 0.15f ) );
-				Contents( rect );
+				Contents( rect, true );
 			}
 			finally
 			{
@@ -208,39 +212,64 @@ namespace HammerUnity.EditorTools
 			}
 		}
 
-		/// <summary>What's in the popup: the current step, or the list of guides.</summary>
-		static void Contents( Rect rect )
+		/// <summary>
+		/// What's in the popup: the current step, or the list of guides. Drawn on repaint; on a
+		/// click (drawing false) it only works out what was clicked.
+		/// </summary>
+		static void Contents( Rect rect, bool drawing )
 		{
 			Styles();
-			if ( GUI.Button( new Rect( rect.xMax - 28, rect.y + 6, 20, 18 ), "✕", EditorStyles.miniButton ) )
-			{
-				_picking = false;
-				Stop();
-				return;
-			}
+			var mouse = Event.current.mousePosition;
+			bool Hit( Rect r ) => !drawing && r.Contains( mouse );
+
+			var close = new Rect( rect.xMax - 28, rect.y + 6, 20, 18 );
+			if ( drawing ) GUI.Button( close, "✕", EditorStyles.miniButton );
+			if ( Hit( close ) ) { Stop(); return; }
 
 			if ( _picking )
 			{
-				GUI.Label( new Rect( rect.x + 12, rect.y + 6, rect.width - 50, 20 ), "How do I...", _title );
 				var list = new Rect( rect.x + 8, rect.y + 30, rect.width - 16, rect.height - 38 );
 				var inner = new Rect( 0, 0, list.width - 16, All.Count * 24 );
+				_pickScroll.y = Mathf.Clamp( _pickScroll.y, 0, Mathf.Max( 0, inner.height - list.height ) );
+
+				if ( !drawing )
+				{
+					if ( !list.Contains( mouse ) ) return;
+					var index = Mathf.FloorToInt( (mouse.y - list.y + _pickScroll.y) / 24 );
+					if ( index >= 0 && index < All.Count )
+						Start( All[index], _pickTool ?? HammerMeshTool.Focused );
+					return;
+				}
+
+				GUI.Label( new Rect( rect.x + 12, rect.y + 6, rect.width - 50, 20 ), "How do I...", _title );
 				_pickScroll = GUI.BeginScrollView( list, _pickScroll, inner );
 				for ( int i = 0; i < All.Count; i++ )
 				{
 					var row = new Rect( 0, i * 24, inner.width, 22 );
-					if ( Event.current.type == EventType.Repaint && row.Contains( Event.current.mousePosition ) )
+					if ( row.Contains( Event.current.mousePosition ) )
 						EditorGUI.DrawRect( row, new Color( 0.24f, 0.37f, 0.6f ) );
-					if ( GUI.Button( row, "  " + All[i].Title, _text ) )
-					{
-						_picking = false;
-						Start( All[i], _pickTool ?? HammerMeshTool.Focused );
-					}
+					GUI.Label( row, "  " + All[i].Title, _text );
 				}
 				GUI.EndScrollView();
 				return;
 			}
 
 			var step = _current.Steps[_step];
+			var back = new Rect( rect.x + 12, rect.yMax - 32, 70, 22 );
+			var next = new Rect( rect.xMax - 92, rect.yMax - 32, 80, 22 );
+			var last = _step == _current.Steps.Count - 1;
+
+			if ( !drawing )
+			{
+				if ( Hit( back ) && _step > 0 ) Go( _step - 1 );
+				else if ( Hit( next ) )
+				{
+					if ( last ) Stop();
+					else Go( _step + 1 );
+				}
+				return;
+			}
+
 			GUI.Label( new Rect( rect.x + 12, rect.y + 6, rect.width - 110, 20 ), _current.Title, _title );
 			GUI.Label( new Rect( rect.xMax - 110, rect.y + 6, 80, 20 ), $"Step {_step + 1} of {_current.Steps.Count}", _small );
 
@@ -249,16 +278,10 @@ namespace HammerUnity.EditorTools
 			else if ( step.Done != null ) text += "\n<color=#999><i>Do it and this moves on by itself.</i></color>";
 			GUI.Label( new Rect( rect.x + 12, rect.y + 28, rect.width - 24, rect.height - 70 ), text, _text );
 
-			var y = rect.yMax - 32;
 			GUI.enabled = _step > 0;
-			if ( GUI.Button( new Rect( rect.x + 12, y, 70, 22 ), "Back" ) ) Go( _step - 1 );
+			GUI.Button( back, "Back" );
 			GUI.enabled = true;
-			var last = _step == _current.Steps.Count - 1;
-			if ( GUI.Button( new Rect( rect.xMax - 92, y, 80, 22 ), last ? "Finish" : "Next" ) )
-			{
-				if ( last ) Stop();
-				else Go( _step + 1 );
-			}
+			GUI.Button( next, last ? "Finish" : "Next" );
 		}
 
 		static bool SafeDone( Step step )

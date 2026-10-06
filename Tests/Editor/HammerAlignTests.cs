@@ -181,5 +181,56 @@ namespace HammerUnity.Tests
 			DisplacementTool.Displace( ground, center, Vector3.up, center + Vector3.down, DisplaceMode.Flatten, false, 512, 1, 1 );
 			Assert.That( Height(), Is.LessThan( raised * 0.75f ), "flatten pulls towards the stroke plane" );
 		}
+
+		[Test]
+		public void DisplacementNewBrushes()
+		{
+			var ground = Make( new QuadPrimitive(), S.Vector3.Zero, new S.Vector3( 256, 256, 0 ) );
+			_tool.Mode = EditMode.Object;
+			UnityEditor.Selection.objects = new Object[] { ground.gameObject };
+			for ( int i = 0; i < 3; i++ ) _tool.Subdivide();
+
+			var mesh = ground.Mesh;
+			float Height() => mesh.VertexHandles.Max( v => mesh.GetVertexPosition( v ).z );
+			float Lowest() => mesh.VertexHandles.Min( v => mesh.GetVertexPosition( v ).z );
+			var center = ground.transform.position;
+			float Flat( float t ) => 1;
+
+			// Raise To: up towards the level, never past it
+			var level = center + Vector3.up * 16 * SourceSpace.UnitScale;
+			for ( int i = 0; i < 40; i++ )
+				DisplacementTool.Displace( ground, center, Vector3.up, level, DisplaceMode.RaiseTo, false, 64, 1, Flat, null );
+			Assert.That( Height(), Is.GreaterThan( 12 ).And.LessThanOrEqualTo( 16.01f ), "raised up to the level" );
+
+			// Noise: some up, some down
+			var before = Lowest();
+			DisplacementTool.Displace( ground, center + Vector3.right * 2, Vector3.up, center, DisplaceMode.Noise, false, 256, 1, Flat, null );
+			Assert.That( Lowest(), Is.LessThan( before ), "noise digs in as well as lifting" );
+
+			// Backfaces: a camera underneath sees none of the upward faces, so nothing moves
+			var shape = string.Join( ",", mesh.VertexHandles.Select( v => mesh.GetVertexPosition( v ).z.ToString( "0.000" ) ) );
+			DisplacementTool.Displace( ground, center, Vector3.up, center, DisplaceMode.PushPull, false, 64, 1, Flat, center + Vector3.down * 10 );
+			Assert.That( string.Join( ",", mesh.VertexHandles.Select( v => mesh.GetVertexPosition( v ).z.ToString( "0.000" ) ) ), Is.EqualTo( shape ), "facing away: left alone" );
+		}
+
+		[Test]
+		public void DisplacementFalloffPresets()
+		{
+			var preset = DisplacementTool.Preset;
+			try
+			{
+				typeof( DisplacementTool ).GetMethod( "ApplyPreset", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static ).Invoke( null, new object[] { DisplaceBrushPreset.Smooth } );
+				Assert.That( DisplacementTool.Falloff01( 0 ), Is.EqualTo( 0 ).Within( 1e-3f ), "nothing at the rim" );
+				Assert.That( DisplacementTool.Falloff01( 1 ), Is.EqualTo( 1 ).Within( 1e-3f ), "full in the middle" );
+				Assert.That( DisplacementTool.Falloff01( 0.5f ), Is.EqualTo( 0.5f ).Within( 0.05f ), "half way, half strength" );
+
+				typeof( DisplacementTool ).GetMethod( "ApplyPreset", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static ).Invoke( null, new object[] { DisplaceBrushPreset.Constant } );
+				Assert.That( DisplacementTool.Falloff01( 0.1f ), Is.EqualTo( 1 ), "constant: full everywhere inside" );
+			}
+			finally
+			{
+				typeof( DisplacementTool ).GetMethod( "ApplyPreset", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static ).Invoke( null, new object[] { preset } );
+			}
+		}
 	}
 }

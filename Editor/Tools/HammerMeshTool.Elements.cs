@@ -47,6 +47,7 @@ namespace HammerUnity.EditorTools
 			{
 				if ( !DrawsInCamera( view ) ) DrawElements();
 				DrawDimensions();
+				DrawEdgeAngle();
 
 				// Hammer shows the length of the edge under the mouse
 				if ( HammerSettings.EdgeLengthPreview && _hover is MeshEdge hoverEdge && hoverEdge.IsValid && !_dragging )
@@ -65,6 +66,46 @@ namespace HammerUnity.EditorTools
 
 			HandleSelectionInput( e );
 			HandleCommands( e );
+		}
+
+		/// <summary>
+		/// Hammer shows the angle between two selected edges that meet: an arc across the corner
+		/// with the angle in degrees.
+		/// </summary>
+		void DrawEdgeAngle()
+		{
+			if ( _mode != EditMode.Edge || Selection.Count != 2 || _dragging ) return;
+			var edges = SelectedEdges.ToList();
+			if ( edges.Count != 2 || edges[0].Component != edges[1].Component ) return;
+
+			edges[0].GetWorldPoints( out var a0, out var b0 );
+			edges[1].GetWorldPoints( out var a1, out var b1 );
+
+			// The corner they share, and the far end of each
+			Vector3 corner, end0, end1;
+			const float same = 1e-8f;
+			if ( (a0 - a1).sqrMagnitude < same ) { corner = a0; end0 = b0; end1 = b1; }
+			else if ( (a0 - b1).sqrMagnitude < same ) { corner = a0; end0 = b0; end1 = a1; }
+			else if ( (b0 - a1).sqrMagnitude < same ) { corner = b0; end0 = a0; end1 = b1; }
+			else if ( (b0 - b1).sqrMagnitude < same ) { corner = b0; end0 = a0; end1 = a1; }
+			else return;
+
+			var d0 = (end0 - corner).normalized;
+			var d1 = (end1 - corner).normalized;
+			var normal = Vector3.Cross( d0, d1 );
+			if ( normal.sqrMagnitude < 1e-10f ) return;
+			var angle = Vector3.Angle( d0, d1 );
+
+			// Sized on screen, but never past the shorter edge
+			var radius = Mathf.Min( HammerGUI.HandleSize( corner ) * 0.12f, Mathf.Min( (end0 - corner).magnitude, (end1 - corner).magnitude ) * 0.6f );
+			Handles.zTest = UnityEngine.Rendering.CompareFunction.Always;
+			Handles.color = new Color( 1, 1, 1, 0.9f );
+			Handles.DrawWireArc( corner, normal.normalized, d0, angle, radius, 1.5f );
+
+			var middle = (Quaternion.AngleAxis( angle * 0.5f, normal.normalized ) * d0).normalized;
+			var tick = corner + middle * radius;
+			Handles.DrawAAPolyLine( 1.5f, tick - middle * radius * 0.12f, tick + middle * radius * 0.12f );
+			HammerGUI.OutlinedLabel( corner + middle * radius * 1.35f, $"{angle:0.00}", Color.white );
 		}
 
 		/// <summary>

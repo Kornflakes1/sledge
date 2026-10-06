@@ -782,7 +782,7 @@ namespace HammerUnity.EditorTools
 		{
 			if ( Event.current.type == EventType.Repaint )
 			{
-				EditorGUI.DrawRect( rect, HammerIcons.Background );
+				EditorGUI.DrawRect( rect, HammerIcons.Bar );
 				EditorGUI.DrawRect( new Rect( rect.xMax - 1, rect.y, 1, rect.height ), HammerIcons.Divider );
 			}
 

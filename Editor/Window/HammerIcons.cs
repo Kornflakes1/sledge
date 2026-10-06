@@ -44,7 +44,9 @@ namespace HammerUnity.EditorTools
 
 		public static Texture Select => _select ??= Draw( c =>
 		{
-			Polygon( c, Light, new( 9, 4 ), new( 9, 25 ), new( 14, 20.5f ), new( 18, 28.5f ), new( 21.5f, 27 ), new( 17.5f, 19 ), new( 24, 18.5f ) );
+			Vector2[] arrow = { new( 9, 4 ), new( 9, 25 ), new( 14, 20.5f ), new( 18, 28.5f ), new( 21.5f, 27 ), new( 17.5f, 19 ), new( 24, 18.5f ) };
+			Polygon( c, new Color( 0.78f, 0.86f, 0.97f ), arrow );
+			for ( int k = 0; k < arrow.Length; k++ ) Line( c, arrow[k], arrow[(k + 1) % arrow.Length], 1.2f, new Color( 0.2f, 0.25f, 0.35f ) );
 		} );
 
 		public static Texture Move => _move ??= Draw( c =>
@@ -189,6 +191,81 @@ namespace HammerUnity.EditorTools
 
 		static Texture2D _pivot, _block, _polygon, _texScale, _showGrid, _wires;
 
+		// ── Displacement brushes ──
+
+		static Texture2D[] _brushes;
+
+		static readonly Color Ground = new( 0.6f, 0.6f, 0.6f );
+
+		/// <summary>The eight displacement brush icons, in the order of <see cref="DisplaceMode"/>.</summary>
+		public static Texture Brush( int index )
+		{
+			_brushes ??= new Texture2D[8];
+			return _brushes[index] ??= Draw( c =>
+			{
+				void Arrow( Vector2 from, Vector2 to )
+				{
+					Line( c, from, to, 2.2f, Light );
+					var d = (to - from).normalized;
+					var side = new Vector2( -d.y, d.x );
+					Polygon( c, Light, to + d * 2, to - d * 3.5f + side * 3.5f, to - d * 3.5f - side * 3.5f );
+				}
+
+				switch ( index )
+				{
+					case 0: // Push / pull: straight up off the surface
+						Line( c, new( 3, 25 ), new( 29, 25 ), 2.2f, Ground );
+						Arrow( new( 16, 23 ), new( 16, 7 ) );
+						break;
+					case 1: // Inflate: a bump swelling outwards
+						Arc( c, new( 16, 26 ), 10, 0, 180, 2.2f, Ground );
+						Line( c, new( 3, 26 ), new( 29, 26 ), 2.2f, Ground );
+						Arrow( new( 16, 14 ), new( 16, 4 ) );
+						Arrow( new( 9, 18 ), new( 4, 12 ) );
+						Arrow( new( 23, 18 ), new( 28, 12 ) );
+						break;
+					case 2: // Grab: move it about
+						Arrow( new( 16, 16 ), new( 16, 4 ) );
+						Arrow( new( 16, 16 ), new( 16, 28 ) );
+						Arrow( new( 16, 16 ), new( 4, 16 ) );
+						Arrow( new( 16, 16 ), new( 28, 16 ) );
+						break;
+					case 3: // Noise: a rough, jagged surface
+					{
+						Vector2[] p = { new( 3, 22 ), new( 7, 14 ), new( 10, 20 ), new( 14, 9 ), new( 18, 18 ), new( 21, 12 ), new( 25, 21 ), new( 29, 15 ) };
+						for ( int k = 1; k < p.Length; k++ ) Line( c, p[k - 1], p[k], 2.2f, Light );
+						Line( c, new( 3, 27 ), new( 29, 27 ), 2.2f, Ground );
+						break;
+					}
+					case 4: // Flatten: a level plateau
+						Line( c, new( 3, 26 ), new( 9, 12 ), 2.2f, Light );
+						Line( c, new( 9, 12 ), new( 23, 12 ), 2.2f, Light );
+						Line( c, new( 23, 12 ), new( 29, 26 ), 2.2f, Light );
+						break;
+					case 5: // Pinch: drawn in to a ridge
+						Line( c, new( 3, 27 ), new( 13, 21 ), 2.2f, Light );
+						Line( c, new( 13, 21 ), new( 16, 5 ), 2.2f, Light );
+						Line( c, new( 16, 5 ), new( 19, 21 ), 2.2f, Light );
+						Line( c, new( 19, 21 ), new( 29, 27 ), 2.2f, Light );
+						break;
+					case 6: // Raise to: up to a set height
+						Line( c, new( 5, 5 ), new( 27, 5 ), 2.2f, Accent );
+						Arc( c, new( 9, 27 ), 5, 0, 180, 2.2f, Ground );
+						Arc( c, new( 23, 27 ), 5, 0, 180, 2.2f, Ground );
+						Arrow( new( 16, 26 ), new( 16, 10 ) );
+						break;
+					default: // Smooth: rough to gentle
+						Line( c, new( 5, 7 ), new( 27, 7 ), 2.2f, Ground );
+						for ( int k = 0; k < 24; k++ )
+						{
+							float x0 = 4 + k, x1 = 5 + k;
+							Line( c, new( x0, 20 + Mathf.Sin( x0 * 0.4f ) * 4 ), new( x1, 20 + Mathf.Sin( x1 * 0.4f ) * 4 ), 2.2f, Light );
+						}
+						break;
+				}
+			} );
+		}
+
 		public static Texture Pivot => _pivot ??= Draw( c =>
 		{
 			Arc( c, new( 16, 16 ), 11, 0, 360, 2.2f, Light );
@@ -205,8 +282,7 @@ namespace HammerUnity.EditorTools
 		public static Texture PolygonIcon => _polygon ??= Draw( c =>
 		{
 			Vector2[] p = { new( 6, 12 ), new( 16, 4 ), new( 27, 10 ), new( 25, 25 ), new( 9, 27 ) };
-			for ( int k = 0; k < p.Length; k++ ) Line( c, p[k], p[(k + 1) % p.Length], 2.2f, Accent );
-			foreach ( var q in p ) Dot( c, q, 2.4f, Light );
+			for ( int k = 0; k < p.Length; k++ ) Line( c, p[k], p[(k + 1) % p.Length], 2.6f, new Color( 0.93f, 0.72f, 0.12f ) );
 		} );
 
 		public static Texture TexScaleLock => _texScale ??= Draw( c =>
@@ -347,8 +423,7 @@ namespace HammerUnity.EditorTools
 
 			if ( e.type == EventType.Repaint )
 			{
-				if ( on || hover ) EditorGUI.DrawRect( rect, on ? ButtonOn : ButtonHover );
-				if ( on ) EditorGUI.DrawRect( new Rect( rect.x, rect.y, 3, rect.height ), Accent );
+				Tile( rect, on, hover && enabled );
 
 				var pad = rect.width * 0.2f;
 				var old = GUI.color;
@@ -359,6 +434,39 @@ namespace HammerUnity.EditorTools
 
 			GUI.Label( rect, new GUIContent( "", tip ), GUIStyle.none );
 			return enabled && Click( rect );
+		}
+
+		static readonly Color TileFill = new( 0.2f, 0.2f, 0.2f );
+		static readonly Color TileHover = new( 0.26f, 0.26f, 0.26f );
+		static readonly Color TileOn = new( 0.29f, 0.31f, 0.36f );
+		static readonly Color TileLight = new( 0.3f, 0.3f, 0.3f );
+		static readonly Color TileDark = new( 0.06f, 0.06f, 0.06f );
+		static readonly Color TileBorderOn = new( 0.95f, 0.55f, 0.15f );
+
+		/// <summary>
+		/// Hammer's tool button: a raised tile with soft corners, outlined in orange when on.
+		/// </summary>
+		static void Tile( Rect r, bool on, bool hover )
+		{
+			var fill = on ? TileOn : hover ? TileHover : TileFill;
+			// Rounded look: the body inset by a pixel at the corners
+			EditorGUI.DrawRect( new Rect( r.x + 1, r.y, r.width - 2, r.height ), fill );
+			EditorGUI.DrawRect( new Rect( r.x, r.y + 1, r.width, r.height - 2 ), fill );
+
+			if ( on )
+			{
+				var b = TileBorderOn;
+				EditorGUI.DrawRect( new Rect( r.x + 1, r.y, r.width - 2, 1 ), b );
+				EditorGUI.DrawRect( new Rect( r.x + 1, r.yMax - 1, r.width - 2, 1 ), b );
+				EditorGUI.DrawRect( new Rect( r.x, r.y + 1, 1, r.height - 2 ), b );
+				EditorGUI.DrawRect( new Rect( r.xMax - 1, r.y + 1, 1, r.height - 2 ), b );
+			}
+			else
+			{
+				// Lit from above
+				EditorGUI.DrawRect( new Rect( r.x + 1, r.y, r.width - 2, 1 ), TileLight );
+				EditorGUI.DrawRect( new Rect( r.x + 1, r.yMax - 1, r.width - 2, 1 ), TileDark );
+			}
 		}
 
 		static bool Click( Rect rect )

@@ -35,7 +35,8 @@ namespace HammerUnity.EditorTools
 
 			if ( !_cache.TryGetValue( component, out var bad ) )
 			{
-				bad = component.Mesh.FindBadFaces();
+				// Faces that are only bent are fine in Unity: not a problem unless asked for
+				bad = component.Mesh.FindBadFaces( includeNonPlanar: HammerSettings.WarnBentFaces );
 				_cache[component] = bad;
 			}
 
@@ -43,6 +44,13 @@ namespace HammerUnity.EditorTools
 		}
 
 		public static void Forget( HammerMesh component ) => _cache.Remove( component );
+
+		public static void ForgetAll()
+		{
+			_cache.Clear();
+			Warning = null;
+			HammerViews.RepaintAll();
+		}
 
 		/// <summary>
 		/// After an edit: warn if the edited meshes now have broken faces.

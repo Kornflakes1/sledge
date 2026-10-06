@@ -804,6 +804,8 @@ namespace HammerUnity.EditorTools
 				if ( mode == EditMode.Edge )
 					HammerSettings.ShowHardSoftEdges = EditorGUILayout.ToggleLeft( "Show Hard / Soft Edges", HammerSettings.ShowHardSoftEdges );
 				HammerSettings.ShowNormals = EditorGUILayout.ToggleLeft( "Show Normals", HammerSettings.ShowNormals );
+				var bent = EditorGUILayout.ToggleLeft( new GUIContent( "Warn About Bent Faces", "Faces whose corners aren't flat. Unity draws them fine; Source's compiler doesn't" ), HammerSettings.WarnBentFaces );
+				if ( bent != HammerSettings.WarnBentFaces ) HammerSettings.WarnBentFaces = bent;
 				HammerSettings.DrawWireframe = EditorGUILayout.ToggleLeft( "Draw Wireframe", HammerSettings.DrawWireframe );
 				if ( mode == EditMode.Edge )
 					HammerSettings.EdgeLengthPreview = EditorGUILayout.ToggleLeft( "Edge Length Preview", HammerSettings.EdgeLengthPreview );

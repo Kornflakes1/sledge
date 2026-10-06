@@ -381,6 +381,16 @@ namespace HammerUnity.EditorTools
 		public static float MergeDistance { get => Float( "MergeDistance", 0.1f ); set => Prefs.SetFloat( Prefix + "MergeDistance", Mathf.Max( 0.001f, value ) ); }
 
 		// Display
+		/// <summary>
+		/// Count faces that are merely bent (not flat) as problems. Unity draws them fine as two
+		/// triangles, so it's off by default; it matters for Source's map compiler.
+		/// </summary>
+		public static bool WarnBentFaces
+		{
+			get => Bool( "WarnBentFaces", false );
+			set { Prefs.SetBool( Prefix + "WarnBentFaces", value ); MeshHealth.ForgetAll(); }
+		}
+
 		public static bool ShowNormals { get => Bool( "ShowNormals", false ); set => Prefs.SetBool( Prefix + "ShowNormals", value ); }
 		public static bool ShowHardSoftEdges { get => Bool( "ShowHardSoftEdges", false ); set => Prefs.SetBool( Prefix + "ShowHardSoftEdges", value ); }
 		public static bool DrawWireframe { get => Bool( "DrawWireframe", true ); set => Prefs.SetBool( Prefix + "DrawWireframe", value ); }

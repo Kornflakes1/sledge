@@ -213,8 +213,8 @@ namespace HammerUnity.EditorTools
 			}
 
 			Group( "Apply Displacement To" );
-			if ( EditorGUILayout.ToggleLeft( "Everything", !SelectedOnly, EditorStyles.radioButton ) ) SelectedOnly = false;
-			if ( EditorGUILayout.ToggleLeft( "Selected Objects", SelectedOnly, EditorStyles.radioButton ) ) SelectedOnly = true;
+			if ( GUILayout.Toggle( !SelectedOnly, " Everything", EditorStyles.radioButton ) ) SelectedOnly = false;
+			if ( GUILayout.Toggle( SelectedOnly, " Selected Objects", EditorStyles.radioButton ) ) SelectedOnly = true;
 			GUILayout.Space( 4 );
 			HighlightSelected = EditorGUILayout.ToggleLeft( "Highlight Selected Objects", HighlightSelected );
 		}
@@ -235,7 +235,7 @@ namespace HammerUnity.EditorTools
 
 		static bool BrushButton( DisplaceMode mode )
 		{
-			var rect = GUILayoutUtility.GetRect( 36, 32, GUILayout.Width( 36 ), GUILayout.Height( 32 ) );
+			var rect = GUILayoutUtility.GetRect( 46, 40, GUILayout.Width( 46 ), GUILayout.Height( 40 ) );
 			var clicked = GUI.Button( rect, new GUIContent( "", BrushNames[(int)mode] ), EditorStyles.miniButton );
 			if ( Event.current.type == EventType.Repaint )
 			{
@@ -247,7 +247,7 @@ namespace HammerUnity.EditorTools
 					EditorGUI.DrawRect( new Rect( rect.x, rect.y, 1, rect.height ), border );
 					EditorGUI.DrawRect( new Rect( rect.xMax - 1, rect.y, 1, rect.height ), border );
 				}
-				GUI.DrawTexture( new Rect( rect.x + 6, rect.y + 4, rect.width - 12, rect.height - 8 ), HammerIcons.Brush( IconIndex( mode ) ), ScaleMode.ScaleToFit );
+				GUI.DrawTexture( new Rect( rect.x + 5, rect.y + 3, rect.width - 10, rect.height - 6 ), HammerIcons.Brush( IconIndex( mode ) ), ScaleMode.ScaleToFit );
 			}
 			return clicked;
 		}

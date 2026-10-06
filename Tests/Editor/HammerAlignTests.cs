@@ -213,6 +213,115 @@ namespace HammerUnity.Tests
 			Assert.That( string.Join( ",", mesh.VertexHandles.Select( v => mesh.GetVertexPosition( v ).z.ToString( "0.000" ) ) ), Is.EqualTo( shape ), "facing away: left alone" );
 		}
 
+		// Both selected, the second one last (the active one)
+		static void SelectWithLast( HammerMesh first, HammerMesh last )
+		{
+			// (Unity makes the first of the list the active one)
+			UnityEditor.Selection.objects = new Object[] { last.gameObject, first.gameObject };
+			Assume.That( UnityEditor.Selection.activeGameObject, Is.EqualTo( last.gameObject ) );
+			Assume.That( UnityEditor.Selection.transforms.Length, Is.EqualTo( 2 ) );
+		}
+
+		[Test]
+		public void MeshesModeAlignKeys()
+		{
+			var a = Box( new S.Vector3( 0, 0, 32 ), new S.Vector3( 64, 64, 64 ) );
+			var b = Box( new S.Vector3( 256, 128, 64 ), new S.Vector3( 32, 32, 32 ) );
+			b.transform.rotation = Quaternion.Euler( 0, 35, 10 );
+			_tool.Mode = EditMode.Object;
+
+			// B: the others jump to the last selected object's position (rotation untouched)
+			var turned = a.transform.rotation;
+			SelectWithLast( a, b );
+			_tool.SnapToLastSelected();
+			Assert.That( Vector3.Distance( a.transform.position, b.transform.position ), Is.LessThan( 1e-4f ), "B moves to the last selected" );
+			Assert.That( Quaternion.Angle( a.transform.rotation, turned ), Is.LessThan( 0.01f ), "and doesn't turn" );
+			Undo.PerformUndo();
+			Assert.That( Vector3.Distance( a.transform.position, b.transform.position ), Is.GreaterThan( 1 ), "undoable" );
+
+			// Alt+B: position and rotation
+			SelectWithLast( a, b );
+			_tool.AlignToLastSelected();
+			Assert.That( Vector3.Distance( a.transform.position, b.transform.position ), Is.LessThan( 1e-4f ) );
+			Assert.That( Quaternion.Angle( a.transform.rotation, b.transform.rotation ), Is.LessThan( 0.01f ), "Alt+B turns to match too" );
+
+			// Alt+Q then Alt+E: a workplane from the turned object, then the other set square on it
+			try
+			{
+				UnityEditor.Selection.activeGameObject = b.gameObject;
+				_tool.AlignWorkplaneToSelected();
+				Assert.That( Workplane.Active, "Alt+Q sets a workplane" );
+				Assert.That( Quaternion.Angle( Workplane.Rotation, b.transform.rotation ), Is.LessThan( 0.01f ) );
+
+				a.transform.SetPositionAndRotation( new Vector3( 3, 5, 2 ), Quaternion.identity );
+				UnityEditor.Selection.objects = new Object[] { a.gameObject };
+				_tool.AlignSelectedToWorkplane();
+				Assert.That( Quaternion.Angle( a.transform.rotation, Workplane.Rotation ), Is.LessThan( 0.01f ), "Alt+E turns to the workplane" );
+				Assert.That( Mathf.Abs( Vector3.Dot( a.transform.position - Workplane.Origin, Workplane.Up ) ), Is.LessThan( 1e-4f ), "and sets it down on it" );
+			}
+			finally
+			{
+				Workplane.Reset();
+			}
+		}
+
+		[Test]
+		public void DisplacementNormalAndFlattenModes()
+		{
+			var ground = Make( new QuadPrimitive(), S.Vector3.Zero, new S.Vector3( 256, 256, 0 ) );
+			_tool.Mode = EditMode.Object;
+			UnityEditor.Selection.objects = new Object[] { ground.gameObject };
+			for ( int i = 0; i < 3; i++ ) _tool.Subdivide();
+			var mesh = ground.Mesh;
+
+			// A ramp: height grows along X, so the brush has a highest, lowest and average under it
+			foreach ( var v in mesh.VertexHandles.ToList() )
+			{
+				var p = mesh.GetVertexPosition( v );
+				mesh.SetVertexPosition( v, new S.Vector3( p.x, p.y, p.x * 0.25f ) );
+			}
+			ground.Commit();
+
+			var tool = new DisplacementTool();
+			var any = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+			typeof( DisplacementTool ).GetField( "_targets", any ).SetValue( tool, new List<HammerMesh> { ground } );
+			var center = ground.transform.position;
+			Vector3 Direction() => (Vector3)typeof( DisplacementTool ).GetMethod( "BrushDirection", any ).Invoke( tool, new object[] { center, Vector3.up } );
+			Vector3 Level() => (Vector3)typeof( DisplacementTool ).GetMethod( "FlattenLevel", any ).Invoke( tool, new object[] { center, Vector3.up, center } );
+
+			var normal = DisplacementTool.NormalMode;
+			var flatten = DisplacementTool.FlattenMode;
+			var radius = DisplacementTool.Radius;
+			try
+			{
+				DisplacementTool.Radius = 64;
+				DisplacementTool.NormalMode = DisplaceNormalMode.Average;
+				var average = Direction();
+				Assert.That( Vector3.Angle( average, Vector3.up ), Is.GreaterThan( 5 ).And.LessThan( 30 ), "average follows the slope" );
+				DisplacementTool.NormalMode = DisplaceNormalMode.BrushCenter;
+				Assert.That( Direction(), Is.EqualTo( Vector3.up ), "brush centre uses the hit" );
+				DisplacementTool.NormalMode = DisplaceNormalMode.X;
+				Assert.That( Direction(), Is.EqualTo( Vector3.right ) );
+
+				DisplacementTool.FlattenMode = DisplaceFlattenMode.Highest;
+				var high = Vector3.Dot( Level() - center, Vector3.up );
+				DisplacementTool.FlattenMode = DisplaceFlattenMode.Lowest;
+				var low = Vector3.Dot( Level() - center, Vector3.up );
+				DisplacementTool.FlattenMode = DisplaceFlattenMode.Average;
+				var mid = Vector3.Dot( Level() - center, Vector3.up );
+				DisplacementTool.FlattenMode = DisplaceFlattenMode.Center;
+				Assert.That( Level(), Is.EqualTo( center ), "centre: the brush point" );
+				Assert.That( high, Is.GreaterThan( mid ), "highest above average" );
+				Assert.That( low, Is.LessThan( mid ), "lowest below average" );
+			}
+			finally
+			{
+				DisplacementTool.NormalMode = normal;
+				DisplacementTool.FlattenMode = flatten;
+				DisplacementTool.Radius = radius;
+			}
+		}
+
 		[Test]
 		public void DisplacementFalloffPresets()
 		{

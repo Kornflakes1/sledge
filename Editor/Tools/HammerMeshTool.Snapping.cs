@@ -27,17 +27,22 @@ namespace HammerUnity.EditorTools
 			var camera = HammerGUI.Camera;
 			if ( camera == null ) return;
 			var normal = camera.orthographic ? camera.transform.forward : (p - camera.transform.position).normalized;
-			var radius = HammerGUI.HandleSize( p ) * 0.022f;
+			var radius = HammerGUI.HandleSize( p ) * 0.1f;
 
 			var z = UnityEditor.Handles.zTest;
 			UnityEditor.Handles.zTest = UnityEngine.Rendering.CompareFunction.Always;
+			// A dark rim under the ring so it shows on light and dark surfaces alike
+			UnityEditor.Handles.color = new Color( 0, 0, 0, 0.6f );
+			UnityEditor.Handles.DrawWireDisc( p, normal, radius, 7.0f );
 			if ( _snappedToVertex )
 			{
+				UnityEditor.Handles.color = new Color( 0, 0, 0, 0.6f );
+				UnityEditor.Handles.DrawSolidDisc( p, normal, radius * 0.55f );
 				UnityEditor.Handles.color = SnapDotColor;
-				UnityEditor.Handles.DrawSolidDisc( p, normal, radius * 0.6f );
+				UnityEditor.Handles.DrawSolidDisc( p, normal, radius * 0.45f );
 			}
 			UnityEditor.Handles.color = _snappedToVertex ? SnapOnColor : SnapNearColor;
-			UnityEditor.Handles.DrawWireDisc( p, normal, radius, 3.0f );
+			UnityEditor.Handles.DrawWireDisc( p, normal, radius, 4.0f );
 			UnityEditor.Handles.zTest = z;
 		}
 

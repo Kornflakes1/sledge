@@ -98,10 +98,10 @@ namespace HammerUnity.EditorTools
 			var angle = Vector3.Angle( d0, d1 );
 
 			// Sized on screen, but never past the shorter edge
-			var radius = Mathf.Min( HammerGUI.HandleSize( corner ) * 0.12f, Mathf.Min( (end0 - corner).magnitude, (end1 - corner).magnitude ) * 0.6f );
+			var radius = Mathf.Min( HammerGUI.HandleSize( corner ) * 0.3f, Mathf.Min( (end0 - corner).magnitude, (end1 - corner).magnitude ) * 0.6f );
 			Handles.zTest = UnityEngine.Rendering.CompareFunction.Always;
 			Handles.color = new Color( 1, 1, 1, 0.9f );
-			Handles.DrawWireArc( corner, normal.normalized, d0, angle, radius, 1.5f );
+			Handles.DrawWireArc( corner, normal.normalized, d0, angle, radius, 2.5f );
 
 			var middle = (Quaternion.AngleAxis( angle * 0.5f, normal.normalized ) * d0).normalized;
 			var tick = corner + middle * radius;
@@ -516,7 +516,7 @@ namespace HammerUnity.EditorTools
 				MeshHealth.Draw( component, Lift );
 
 				foreach ( var he in OpenEdges( component ) )
-					DrawOpenEdgeTicks( component, he, new Color( 0.45f, 0.78f, 1.0f, 0.55f ) );
+					DrawOpenEdgeTicks( component, he, OpenEdgeColor, true );
 			}
 
 			// Wires (and vertices) only on the mesh under the mouse and meshes with something selected
@@ -704,7 +704,10 @@ namespace HammerUnity.EditorTools
 		/// <summary>
 		/// s&amp;box's open edge marker: short ticks along the edge pointing into the face it borders.
 		/// </summary>
-		static void DrawOpenEdgeTicks( HammerMesh component, HalfEdgeMesh.HalfEdgeHandle edge, Color color )
+		// Bright and thick so a hole reads at a glance, whatever's around it
+		static readonly Color OpenEdgeColor = new( 1.0f, 0.68f, 0.12f, 1.0f );
+
+		static void DrawOpenEdgeTicks( HammerMesh component, HalfEdgeMesh.HalfEdgeHandle edge, Color color, bool withLine = false )
 		{
 			var mesh = component.Mesh;
 			var face = mesh.GetHalfEdgeFace( edge );
@@ -734,13 +737,15 @@ namespace HammerUnity.EditorTools
 				var p = Vector3.Lerp( a, b, travelled / length );
 				var size = HammerGUI.HandleSize( p );
 				lines.Add( Lift( p ) );
-				lines.Add( Lift( p + tangent * size * 0.035f ) );
+				lines.Add( Lift( p + tangent * size * 0.07f ) );
 				if ( travelled >= length ) break;
-				travelled = Mathf.Min( length, travelled + size * 0.05f );
+				travelled = Mathf.Min( length, travelled + size * 0.07f );
 			}
 
 			Handles.color = color;
-			Handles.DrawLines( lines.ToArray() );
+			if ( withLine ) Handles.DrawLine( Lift( a ), Lift( b ), Px( 3.5f ) );
+			for ( int i = 0; i + 1 < lines.Count; i += 2 )
+				Handles.DrawLine( lines[i], lines[i + 1], Px( 2.0f ) );
 		}
 
 		// Lines (or points) in a mesh's own space, kept until it's rebuilt or the key changes

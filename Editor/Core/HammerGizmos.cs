@@ -53,7 +53,15 @@ namespace HammerUnity.EditorTools
 		/// </summary>
 		public static bool CentreDragging => _centreId != 0 && GUIUtility.hotControl == _centreId;
 
-		static Color AxisColor( int axis ) => axis == 0 ? RightColor : axis == 1 ? UpColor : ForwardColor;
+		// Local space: Hammer swaps to a second set so you can tell at a glance the axes aren't the
+		// world's (X rose, Y green, Z purple)
+		static readonly Color LocalRightColor = new( 0.3f, 0.78f, 0.42f );
+		static readonly Color LocalUpColor = new( 0.48f, 0.22f, 0.92f );
+		static readonly Color LocalForwardColor = new( 0.82f, 0.32f, 0.38f );
+
+		static Color AxisColor( int axis ) => HammerSettings.GlobalSpace
+			? (axis == 0 ? RightColor : axis == 1 ? UpColor : ForwardColor)
+			: (axis == 0 ? LocalRightColor : axis == 1 ? LocalUpColor : LocalForwardColor);
 		static Vector3 Axis( int axis ) => axis == 0 ? Vector3.right : axis == 1 ? Vector3.up : Vector3.forward;
 
 		static Color ControlColor( int id, Color normal )

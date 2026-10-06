@@ -186,6 +186,9 @@ namespace HammerUnity.EditorTools
 			// Layout like Source 2 Hammer / s&box: selection modes across the top, tool strip down
 			// the left, then the Tool Properties panel, then the viewports
 			var top = MenuBarHeight + SceneTabHeight + ToolbarHeight;
+			if ( e.type == EventType.Layout ) HammerGuides.FirstRun( _tool );
+			_guideAreas["menu"] = new Rect( 0, 0, position.width, MenuBarHeight );
+			_guideAreas["status"] = new Rect( 0, position.height - StatusHeight, position.width, StatusHeight );
 			DrawSceneTabs( new Rect( 0, MenuBarHeight, position.width, SceneTabHeight ) );
 			DrawToolbar( new Rect( 0, MenuBarHeight + SceneTabHeight, position.width, ToolbarHeight ) );
 
@@ -194,6 +197,7 @@ namespace HammerUnity.EditorTools
 
 			var body = new Rect( 0, top, position.width, position.height - top - StatusHeight );
 			DrawToolStrip( new Rect( 0, body.y, StripWidth, body.height ) );
+			_guideAreas["strip"] = new Rect( 0, body.y, StripWidth, body.height );
 
 			_panelWidth = Mathf.Clamp( _panelWidth <= 0 ? 300 : _panelWidth, MinPanelWidth, Mathf.Min( MaxPanelWidth, position.width * 0.6f ) );
 			var panelWidth = _showPanel ? _panelWidth : 0;
@@ -205,6 +209,11 @@ namespace HammerUnity.EditorTools
 			}
 
 			var area = new Rect( StripWidth + panelWidth, body.y, position.width - StripWidth - panelWidth, body.height );
+			_guideAreas["panel"] = new Rect( StripWidth, body.y, panelWidth, body.height );
+			_guideAreas["views"] = area;
+
+			// The guide popup sits over the views: its buttons get the mouse first
+			HammerGuides.Input( area );
 
 			var rects = LayoutViews( area );
 			LastViewRects = rects;
@@ -243,10 +252,15 @@ namespace HammerUnity.EditorTools
 			if ( _maximized < 0 && e.type == EventType.Repaint )
 				SplitterGUI( area );
 
+			HammerGuides.Draw( area, key => _guideAreas.TryGetValue( key, out var r ) && r.width > 0 ? r : null );
+
 			// Checked before the views run, since they use the event
 			if ( mouseUp )
 				_captureView = -1;
 		}
+
+		// Parts of the window the guides point at
+		readonly Dictionary<string, Rect> _guideAreas = new();
 
 		void UpdateHoverView( Event e, Rect[] rects )
 		{
@@ -638,16 +652,19 @@ namespace HammerUnity.EditorTools
 			ModeButton( ref x, y, h, EditMode.Edge, "Edges", HammerIcons.Edge, "2", conversion );
 			ModeButton( ref x, y, h, EditMode.Face, "Faces", HammerIcons.Face, "3", conversion );
 			ModeButton( ref x, y, h, EditMode.Object, "Meshes", HammerIcons.Object, "4", SelectionConversion.None );
+			_guideAreas["modes"] = new Rect( rect.x + 2, rect.y + 1, x - rect.x, rect.height - 2 );
 
 			x += 8;
 			BarDivider( x, rect );
 			x += 9;
 
 			// Settings toggles
+			var togglesFrom = x;
 			HammerSettings.GlobalSpace = BarToggle( ref x, y, h, HammerSettings.GlobalSpace ? HammerIcons.Global : HammerIcons.Local, HammerSettings.GlobalSpace ? "World space (click for local)" : "Local space (click for world)", HammerSettings.GlobalSpace, true ) ? !HammerSettings.GlobalSpace : HammerSettings.GlobalSpace;
 			if ( BarToggle( ref x, y, h, HammerIcons.TexLock, "Texture lock: textures move with the geometry", HammerSettings.TextureLock ) ) HammerSettings.TextureLock = !HammerSettings.TextureLock;
 			if ( BarToggle( ref x, y, h, HammerIcons.TexScaleLock, "Texture scale lock: textures stretch when scaling", HammerSettings.TextureLockScale ) ) HammerSettings.TextureLockScale = !HammerSettings.TextureLockScale;
 			if ( BarToggle( ref x, y, h, HammerIcons.XRay, "Select through geometry", HammerSettings.SelectionThrough ) ) HammerSettings.SelectionThrough = !HammerSettings.SelectionThrough;
+			_guideAreas["toggles"] = new Rect( togglesFrom - 3, rect.y + 1, x - togglesFrom + 3, rect.height - 2 );
 
 			x += 8;
 			BarDivider( x, rect );
@@ -659,7 +676,9 @@ namespace HammerUnity.EditorTools
 			x += 8;
 			BarDivider( x, rect );
 			x += 9;
+			var snapFrom = x;
 			SnapControls( ref x, rect, y, h );
+			_guideAreas["snap"] = new Rect( snapFrom - 3, rect.y + 1, x - snapFrom + 3, rect.height - 2 );
 
 		}
 

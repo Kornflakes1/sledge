@@ -1,0 +1,437 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEditor;
+using UnityEngine;
+
+namespace HammerUnity.EditorTools
+{
+	/// <summary>
+	/// Step-by-step help inside the Hammer window: a tour of the window the first time it opens,
+	/// and "How do I..." guides for making things. Each step is a short popup; steps that can see
+	/// you do them tick themselves off.
+	/// </summary>
+	public static class HammerGuides
+	{
+		public sealed class Step
+		{
+			public string Text;
+
+			/// <summary>Ticks the step off by itself when it returns true (null: press Next).</summary>
+			public Func<Context, bool> Done;
+
+			/// <summary>A part of the window to outline (see <see cref="HammerWindow"/>'s guide areas).</summary>
+			public string Highlight;
+		}
+
+		public sealed class Guide
+		{
+			public string Title;
+			public string Keywords = "";
+			public List<Step> Steps = new();
+		}
+
+		/// <summary>What a step can check, and what things were like when the guide started.</summary>
+		public sealed class Context
+		{
+			public HammerMeshTool Tool;
+			public int MeshesAtStart;
+			public int FacesAtStart;
+
+			public EditMode Mode => Tool.Mode;
+			public SubTool SubTool => Tool.SubTool;
+			public int Meshes => UnityEngine.Object.FindObjectsByType<HammerMesh>( FindObjectsSortMode.None ).Length;
+			public int Faces => UnityEngine.Object.FindObjectsByType<HammerMesh>( FindObjectsSortMode.None ).Sum( c => c.Mesh?.FaceHandles.Count() ?? 0 );
+			public bool MadeAMesh => Meshes > MeshesAtStart;
+			public bool FacesChanged => Faces != FacesAtStart;
+			public int SelectedFaces => Tool.SelectedFaces.Count();
+			public int SelectedEdges => Tool.SelectedEdges.Count();
+			public int SelectedObjects => UnityEditor.Selection.gameObjects.Count( g => g.GetComponent<HammerMesh>() != null );
+		}
+
+		static Guide _current;
+		static int _step;
+		static Context _context;
+		static double _tickedAt;
+
+		public static bool Running => _current != null;
+
+		const string TourSeenKey = "HammerUnity.TourSeen";
+
+		/// <summary>Start the tour the first time the window opens.</summary>
+		public static void FirstRun( HammerMeshTool tool )
+		{
+			if ( HammerSettings.Isolated || EditorPrefs.GetBool( TourSeenKey, false ) ) return;
+			EditorPrefs.SetBool( TourSeenKey, true );
+			Start( Tour, tool );
+		}
+
+		public static void Start( Guide guide, HammerMeshTool tool )
+		{
+			_current = guide;
+			_step = 0;
+			_context = new Context { Tool = tool };
+			Rebase();
+			HammerViews.RepaintAll();
+		}
+
+		public static void Stop()
+		{
+			_current = null;
+			HammerViews.RepaintAll();
+		}
+
+		// What "made a mesh" or "changed the faces" is measured against: the start of each step
+		static void Rebase()
+		{
+			if ( _context?.Tool == null ) return;
+			_context.MeshesAtStart = _context.Meshes;
+			_context.FacesAtStart = _context.Faces;
+		}
+
+		static void Go( int step )
+		{
+			_step = Mathf.Clamp( step, 0, _current.Steps.Count - 1 );
+			Rebase();
+			HammerViews.RepaintAll();
+		}
+
+		// ── The popup ──
+
+		const float Width = 340;
+		static GUIStyle _text, _title, _small;
+
+		static Rect PanelRect( Rect area, float height ) => new( area.xMax - Width - 12, area.yMax - height - 12, Width, height );
+
+		static float Height()
+		{
+			Styles();
+			var step = _current.Steps[_step];
+			return 30 + _text.CalcHeight( new GUIContent( step.Text ), Width - 24 ) + 44;
+		}
+
+		static void Styles()
+		{
+			_text ??= new GUIStyle( EditorStyles.wordWrappedLabel ) { richText = true, fontSize = 12, normal = { textColor = new Color( 0.9f, 0.9f, 0.9f ) } };
+			_title ??= new GUIStyle( EditorStyles.boldLabel ) { normal = { textColor = Color.white } };
+			_small ??= new GUIStyle( EditorStyles.miniLabel ) { alignment = TextAnchor.MiddleRight, normal = { textColor = new Color( 0.65f, 0.65f, 0.65f ) } };
+		}
+
+		/// <summary>
+		/// Before the views: the popup's buttons take their clicks, and clicks on the popup don't
+		/// fall through to the view under it.
+		/// </summary>
+		public static void Input( Rect area )
+		{
+			if ( _current == null || Event.current.type == EventType.Repaint || Event.current.type == EventType.Layout ) return;
+			var rect = PanelRect( area, Height() );
+			Buttons( rect );
+			if ( Event.current.isMouse && rect.Contains( Event.current.mousePosition ) ) Event.current.Use();
+		}
+
+		/// <summary>After the views: check the step, outline what it's about, draw the popup.</summary>
+		public static void Draw( Rect area, Func<string, Rect?> areaOf )
+		{
+			if ( _current == null || Event.current.type != EventType.Repaint ) return;
+
+			// A step that sees itself done moves on (after a moment, so the tick shows)
+			var step = _current.Steps[_step];
+			if ( step.Done != null && _tickedAt <= 0 && SafeDone( step ) )
+				_tickedAt = EditorApplication.timeSinceStartup;
+			if ( _tickedAt > 0 && EditorApplication.timeSinceStartup - _tickedAt > 0.6 )
+			{
+				_tickedAt = 0;
+				if ( _step < _current.Steps.Count - 1 ) Go( _step + 1 );
+				step = _current.Steps[_step];
+			}
+			if ( _tickedAt > 0 ) HammerViews.RepaintAll();
+
+			if ( step.Highlight != null && areaOf( step.Highlight ) is Rect h )
+				Outline( h, new Color( 1.0f, 0.6f, 0.15f ), 2 );
+
+			var rect = PanelRect( area, Height() );
+			EditorGUI.DrawRect( new Rect( rect.x + 3, rect.y + 3, rect.width, rect.height ), new Color( 0, 0, 0, 0.35f ) );
+			EditorGUI.DrawRect( rect, new Color( 0.13f, 0.13f, 0.14f, 0.97f ) );
+			EditorGUI.DrawRect( new Rect( rect.x, rect.y, rect.width, 3 ), new Color( 1.0f, 0.6f, 0.15f ) );
+
+			Styles();
+			GUI.Label( new Rect( rect.x + 12, rect.y + 6, rect.width - 110, 20 ), _current.Title, _title );
+			GUI.Label( new Rect( rect.xMax - 110, rect.y + 6, 80, 20 ), $"Step {_step + 1} of {_current.Steps.Count}", _small );
+
+			var text = step.Text;
+			if ( _tickedAt > 0 ) text = "<color=#5f5>✓</color> " + text;
+			else if ( step.Done != null ) text += "\n<color=#999><i>Do it and this moves on by itself.</i></color>";
+			GUI.Label( new Rect( rect.x + 12, rect.y + 28, rect.width - 24, rect.height - 70 ), text, _text );
+			Buttons( rect );
+		}
+
+		static bool SafeDone( Step step )
+		{
+			try { return _context.Tool != null && step.Done( _context ); }
+			catch ( Exception ) { return false; }
+		}
+
+		static void Buttons( Rect rect )
+		{
+			var y = rect.yMax - 32;
+			if ( GUI.Button( new Rect( rect.xMax - 28, rect.y + 6, 20, 18 ), "✕", EditorStyles.miniButton ) ) { Stop(); return; }
+			GUI.enabled = _step > 0;
+			if ( GUI.Button( new Rect( rect.x + 12, y, 70, 22 ), "Back" ) ) Go( _step - 1 );
+			GUI.enabled = true;
+			var last = _step == _current.Steps.Count - 1;
+			if ( GUI.Button( new Rect( rect.xMax - 92, y, 80, 22 ), last ? "Finish" : "Next" ) )
+			{
+				if ( last ) Stop();
+				else Go( _step + 1 );
+			}
+		}
+
+		static void Outline( Rect r, Color color, float width )
+		{
+			EditorGUI.DrawRect( new Rect( r.x, r.y, r.width, width ), color );
+			EditorGUI.DrawRect( new Rect( r.x, r.yMax - width, r.width, width ), color );
+			EditorGUI.DrawRect( new Rect( r.x, r.y, width, r.height ), color );
+			EditorGUI.DrawRect( new Rect( r.xMax - width, r.y, width, r.height ), color );
+		}
+
+		// ── The guides ──
+
+		static Step S( string text, Func<Context, bool> done = null, string highlight = null ) => new() { Text = text, Done = done, Highlight = highlight };
+
+		public static readonly Guide Tour = new()
+		{
+			Title = "Welcome to Hammer Mesh Tools",
+			Steps =
+			{
+				S( "This window works like Source 2 Hammer. This quick tour points out where everything is. You can take it again from <b>Help > Take the Tour</b>." ),
+				S( "The <b>menu bar</b>: Edit, View, Tools and Help, with every command and its key.", null, "menu" ),
+				S( "The <b>selection modes</b>: Vertices (1), Edges (2), Faces (3) and Meshes (4). Most tools change with the mode.", null, "modes" ),
+				S( "<b>World or local axes</b> (Tab), texture lock, and select-through.", null, "toggles" ),
+				S( "<b>Grid and snapping</b>: grid size ([ and ]), the snap switches, and the angle snap for rotating.", null, "snap" ),
+				S( "The <b>tool strip</b>: Select, Move (T), Rotate (R), Scale (E), Pivot (Insert), then the Block tool (Shift+B), Polygon (Shift+P), vertex paint, and the cutting tools.", null, "strip" ),
+				S( "<b>Tool Properties</b> changes with the mode and tool: every operation is a button here, with its key beside it.", null, "panel" ),
+				S( "The <b>views</b>: a 3D view and Top, Front and Side. In 3D hold the right mouse and use WASD to fly; Alt+drag orbits; the wheel zooms. Shift+Z maximises the view under the mouse.", null, "views" ),
+				S( "The <b>status bar</b> says what's selected and how big it is, and warns if an edit breaks a face.", null, "status" ),
+				S( "That's it. Whenever you forget how to make something, open <b>Help > How do I...</b> for a step-by-step guide. F1 lists every key." ),
+			},
+		};
+
+		public static readonly List<Guide> All = new()
+		{
+			new Guide
+			{
+				Title = "Make a box", Keywords = "block cube brush wall floor",
+				Steps =
+				{
+					S( "Press <b>Shift+B</b> (or the cube on the tool strip) for the Block tool.", c => c.Mode == EditMode.Primitive, "strip" ),
+					S( "In Tool Properties set <b>Geometry Type</b> to Box.", c => HammerSettings.PrimitiveType == "Box", "panel" ),
+					S( "In a view, <b>drag out the base</b>, let go, then move the mouse for the <b>height</b> and click. Drag the handles to adjust.", null, "views" ),
+					S( "Press <b>Enter</b> to make it.", c => c.MadeAMesh ),
+				},
+			},
+			new Guide
+			{
+				Title = "Make stairs", Keywords = "steps staircase",
+				Steps =
+				{
+					S( "Press <b>Shift+B</b> for the Block tool.", c => c.Mode == EditMode.Primitive, "strip" ),
+					S( "Set <b>Geometry Type</b> to Stairs in Tool Properties. The number of steps is there too.", c => HammerSettings.PrimitiveType == "Stairs", "panel" ),
+					S( "Drag out the base, then the height, and press <b>Enter</b>.", c => c.MadeAMesh, "views" ),
+				},
+			},
+			new Guide
+			{
+				Title = "Make an arch or doorway", Keywords = "door arch opening",
+				Steps =
+				{
+					S( "Press <b>Shift+B</b> for the Block tool.", c => c.Mode == EditMode.Primitive, "strip" ),
+					S( "Set <b>Geometry Type</b> to Doorway. Give it an <b>Arch Height</b> for a round top.", c => HammerSettings.PrimitiveType == "Doorway", "panel" ),
+					S( "Drag it out and press <b>Enter</b>.", c => c.MadeAMesh, "views" ),
+					S( "For an arch along existing edges instead: in Edges mode (2) select two edges and press <b>Y</b>." ),
+				},
+			},
+			new Guide
+			{
+				Title = "Draw any shape (polygon)", Keywords = "outline floor plan custom",
+				Steps =
+				{
+					S( "Press <b>Shift+P</b> for the Polygon tool.", c => c.SubTool is PolygonTool, "strip" ),
+					S( "Click out the corners in a view, then click the first point (or press Enter) to close it.", null, "views" ),
+					S( "Move the mouse for the height and click.", c => c.MadeAMesh ),
+				},
+			},
+			new Guide
+			{
+				Title = "Extrude a face", Keywords = "pull push grow out",
+				Steps =
+				{
+					S( "Press <b>3</b> for Faces mode.", c => c.Mode == EditMode.Face, "modes" ),
+					S( "Click a face to select it.", c => c.SelectedFaces > 0, "views" ),
+					S( "Press <b>T</b> for Move, then hold <b>Shift</b> and drag an arrow. Shift+drag always extrudes.", c => c.FacesChanged ),
+				},
+			},
+			new Guide
+			{
+				Title = "Cut a doorway or window (Boolean)", Keywords = "hole subtract boolean opening window door",
+				Steps =
+				{
+					S( "Make the wall, then a box where the hole goes (see <i>Make a box</i>)." ),
+					S( "Press <b>4</b> for Meshes mode.", c => c.Mode == EditMode.Object, "modes" ),
+					S( "Click the <b>cutting box</b>, then Ctrl+click the <b>wall</b> so the wall is selected last.", c => c.SelectedObjects >= 2, "views" ),
+					S( "In Tool Properties press <b>Subtract</b> under Boolean.", c => c.FacesChanged || c.Meshes < c.MeshesAtStart, "panel" ),
+				},
+			},
+			new Guide
+			{
+				Title = "Bevel an edge", Keywords = "round chamfer smooth corner",
+				Steps =
+				{
+					S( "Press <b>2</b> for Edges mode.", c => c.Mode == EditMode.Edge, "modes" ),
+					S( "Click the edge (double-click for the whole loop).", c => c.SelectedEdges > 0, "views" ),
+					S( "Press <b>Alt+F</b> for the Bevel tool. Set the width and steps in Tool Properties (or [ and ] for steps).", c => c.SubTool is BevelTool, "panel" ),
+					S( "Press <b>Enter</b> to keep it. (Plain <b>F</b> does a quick bevel without the tool.)", c => c.SubTool == null && c.FacesChanged ),
+				},
+			},
+			new Guide
+			{
+				Title = "Cut new edges (knife)", Keywords = "edge cut split knife loop",
+				Steps =
+				{
+					S( "Press <b>C</b> for Edge Cut (in Vertices, Edges or Faces mode).", c => c.SubTool is EdgeCutTool ),
+					S( "Click points on edges and faces to draw the cut. Hold Shift to line them up.", null, "views" ),
+					S( "Press <b>Enter</b> to cut. For a cut right round a strip of faces, press <b>V</b> first and click one edge.", c => c.FacesChanged ),
+				},
+			},
+			new Guide
+			{
+				Title = "Slice a mesh (clip)", Keywords = "clip slice split half",
+				Steps =
+				{
+					S( "Select the mesh in Meshes mode (4) or some faces in Faces mode (3).", c => c.SelectedObjects > 0 || c.SelectedFaces > 0 ),
+					S( "Press <b>Shift+X</b> for the Clipping tool.", c => c.SubTool is ClipTool ),
+					S( "Drag a line across the mesh. <b>Shift+X</b> again picks which side to keep; G and F turn the plane.", null, "views" ),
+					S( "Press <b>Enter</b> to clip.", c => c.SubTool == null && c.FacesChanged ),
+				},
+			},
+			new Guide
+			{
+				Title = "Texture a face", Keywords = "material paint texture apply",
+				Steps =
+				{
+					S( "Press <b>3</b> for Faces mode.", c => c.Mode == EditMode.Face, "modes" ),
+					S( "Pick a material in Tool Properties (or Shift+right-click a face to pick one up).", null, "panel" ),
+					S( "Select faces and press <b>Shift+T</b>, or Ctrl+right-click a face to paint it." ),
+				},
+			},
+			new Guide
+			{
+				Title = "Move the pivot", Keywords = "pivot origin rotate around centre",
+				Steps =
+				{
+					S( "Select what you want to turn or scale." ),
+					S( "Press <b>Insert</b> (or the pivot button) and drag the diamond. Or hold <b>Tab</b> and click where the pivot should go.", null, "strip" ),
+					S( "Rotate (R) or scale (E) now turns round that point. In Meshes mode, Ctrl+D makes it the object's origin." ),
+				},
+			},
+			new Guide
+			{
+				Title = "Make a curved corridor", Keywords = "curve bend corridor ring repeat",
+				Steps =
+				{
+					S( "In Faces mode select the end face of a box.", c => c.SelectedFaces > 0 ),
+					S( "Hold <b>Tab</b> and click off to the side: the middle of the curve.", null, "views" ),
+					S( "Press <b>R</b>, then hold <b>Shift</b> and drag a ring 15 degrees: it extrudes round the pivot.", c => c.FacesChanged ),
+					S( "Press <b>Shift+G</b> a few times to repeat it round the curve." ),
+				},
+			},
+			new Guide
+			{
+				Title = "Mirror a mesh", Keywords = "mirror symmetry flip copy",
+				Steps =
+				{
+					S( "Select the mesh (Meshes mode) or faces (Faces mode).", c => c.SelectedObjects > 0 || c.SelectedFaces > 0 ),
+					S( "Press <b>Shift+F</b> for the Mirror tool and pick the axis and plane in Tool Properties.", c => c.SubTool is MirrorTool, "panel" ),
+					S( "Press <b>Enter</b>.", c => c.SubTool == null ),
+				},
+			},
+			new Guide
+			{
+				Title = "Sculpt terrain", Keywords = "displacement terrain ground hill sculpt",
+				Steps =
+				{
+					S( "Make a flat box or quad for the ground, then subdivide it a few times (Subdivision in Tool Properties) so there's something to shape." ),
+					S( "Press <b>Shift+D</b> for the Displacement tool.", c => c.SubTool is DisplacementTool ),
+					S( "Pick a brush and drag on the ground. Ctrl reverses, Shift smooths, Ctrl+wheel resizes.", null, "panel" ),
+					S( "Press <b>Enter</b> to keep the strokes (Esc throws them all away)." ),
+				},
+			},
+			new Guide
+			{
+				Title = "Fill a hole", Keywords = "cap close fill hole open",
+				Steps =
+				{
+					S( "Press <b>2</b> for Edges mode.", c => c.Mode == EditMode.Edge, "modes" ),
+					S( "Double-click an edge round the hole to select the whole loop.", c => c.SelectedEdges > 2 ),
+					S( "Press <b>P</b> to fill it.", c => c.FacesChanged ),
+				},
+			},
+			new Guide
+			{
+				Title = "Join two faces (bridge)", Keywords = "bridge connect join tunnel",
+				Steps =
+				{
+					S( "Press <b>3</b> for Faces mode and select two faces that face each other.", c => c.SelectedFaces == 2, "views" ),
+					S( "Press <b>B</b> to bridge them (Alt+B for the Bridge tool with more options).", c => c.FacesChanged ),
+				},
+			},
+		};
+
+		// ── Picking a guide ──
+
+		/// <summary>Help > How do I...: a searchable list of guides.</summary>
+		public sealed class Picker : PopupWindowContent
+		{
+			readonly HammerMeshTool _tool;
+			string _search = "";
+			Vector2 _scroll;
+
+			public Picker( HammerMeshTool tool ) => _tool = tool;
+
+			public override Vector2 GetWindowSize() => new( 300, 360 );
+
+			public override void OnGUI( Rect rect )
+			{
+				GUILayout.Label( "How do I...", EditorStyles.boldLabel );
+				GUI.SetNextControlName( "GuideSearch" );
+				_search = EditorGUILayout.TextField( _search, EditorStyles.toolbarSearchField );
+				if ( Event.current.type == EventType.Repaint && string.IsNullOrEmpty( GUI.GetNameOfFocusedControl() ) ) EditorGUI.FocusTextInControl( "GuideSearch" );
+
+				var words = _search.ToLowerInvariant().Split( ' ', StringSplitOptions.RemoveEmptyEntries );
+				var matches = All.Where( g => words.All( w => (g.Title + " " + g.Keywords).ToLowerInvariant().Contains( w ) ) ).ToList();
+
+				_scroll = GUILayout.BeginScrollView( _scroll );
+				foreach ( var guide in matches )
+				{
+					if ( GUILayout.Button( guide.Title, EditorStyles.label ) )
+					{
+						editorWindow.Close();
+						var tool = _tool;
+						EditorApplication.delayCall += () => Start( guide, tool );
+						GUIUtility.ExitGUI();
+					}
+				}
+				if ( matches.Count == 0 ) GUILayout.Label( "No guides match.", EditorStyles.miniLabel );
+				GUILayout.EndScrollView();
+
+				if ( Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Return && matches.Count > 0 )
+				{
+					editorWindow.Close();
+					var tool = _tool;
+					var first = matches[0];
+					EditorApplication.delayCall += () => Start( first, tool );
+					GUIUtility.ExitGUI();
+				}
+			}
+		}
+	}
+}

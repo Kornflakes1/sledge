@@ -217,17 +217,17 @@ namespace HammerUnity.EditorTools
 
 			AddStation( c, "Box", "Block tool (Shift+B): drag the base, release, move for the height, click.",
 				Primitive( c, "Box", new BlockPrimitive(), At( 0 ), size, m ) );
-			AddStation( c, "Cylinder", "Shapes button > Cylinder. Sides is in Tool Properties.",
+			AddStation( c, "Cylinder", "Block tool (Shift+B), Geometry Type Cylinder. Sides is in Tool Properties.",
 				Primitive( c, "Cylinder", new CylinderPrimitive { NumberOfSides = 16 }, At( 1 ), size, m ) );
-			AddStation( c, "Sphere", "Shapes button > Sphere.",
+			AddStation( c, "Sphere", "Block tool (Shift+B), Geometry Type Sphere.",
 				Primitive( c, "Sphere", new SpherePrimitive(), At( 2 ), size, m ) );
-			AddStation( c, "Stairs", "Shapes button > Stairs. Steps is in Tool Properties.",
+			AddStation( c, "Stairs", "Block tool (Shift+B), Geometry Type Stairs. Steps is in Tool Properties.",
 				Primitive( c, "Stairs", new StairsPrimitive { NumberOfSteps = 8, AlignToCamera = false }, At( 3 ), size, m ) );
-			AddStation( c, "Spike", "Shapes button > Spike.",
+			AddStation( c, "Spike", "Block tool (Shift+B), Geometry Type Spike.",
 				Primitive( c, "Spike", new SpikePrimitive(), At( 4 ), size, m ) );
-			AddStation( c, "Arch", "Shapes button > Doorway with Arch Height set: an arch.",
+			AddStation( c, "Arch", "Block tool (Shift+B), Geometry Type Doorway with Arch Height set: an arch.",
 				Primitive( c, "Arch", new DoorwayPrimitive { DoorWidth = 72, DoorHeight = 80, ArchHeight = 36, ArchSegments = 8, AlignToCamera = false }, At( 5, 80 ), new S.Vector3( 32, 160, 160 ), m ) );
-			AddStation( c, "Quad", "Shapes button > Quad: a single flat face.",
+			AddStation( c, "Quad", "Block tool (Shift+B), Geometry Type Quad: a single flat face.",
 				Primitive( c, "Quad", new QuadPrimitive(), At( 6, 1 ), new S.Vector3( 128, 128, 0 ), m ) );
 
 			// Polygon tool: an L-shaped prism, drawn with world points like the tool does
@@ -266,7 +266,7 @@ namespace HammerUnity.EditorTools
 					Primitive( c, "Round Hole", new BlockPrimitive(), At( 3, 64 ), new S.Vector3( 32, 128, 128 ), m ),
 					Primitive( c, "Round Hole Cutter", new CylinderPrimitive { NumberOfSides = 16 }, At( 3, 64 ), new S.Vector3( 64, 64, 64 ), m, roll: 90 ) ) );
 
-			AddStation( c, "Doorway", "Shapes button > Doorway: a wall with a door-sized hole.",
+			AddStation( c, "Doorway", "Block tool (Shift+B), Geometry Type Doorway: a wall with a door-sized hole.",
 				Primitive( c, "Doorway", new DoorwayPrimitive { DoorWidth = 64, DoorHeight = 128, AlignToCamera = false }, At( 4, 96 ), wallSize, m ) );
 
 			AddStation( c, "Arched Doorway", "Doorway with Arch Height and Arch Segments set.",

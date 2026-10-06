@@ -27,5 +27,27 @@ namespace HammerUnity.Tests
 			var unbound = ids.Where( id => { try { ShortcutManager.instance.GetShortcutBinding( id ); return false; } catch { return true; } } ).ToList();
 			Assert.That( unbound, Is.Empty, "menu items whose shortcut the Shortcut Manager doesn't know" );
 		}
+
+		[Test]
+		public void GuidesCheckThemselvesWithoutErrors()
+		{
+			var tool = UnityEngine.ScriptableObject.CreateInstance<HammerMeshTool>();
+			try
+			{
+				var context = new HammerGuides.Context { Tool = tool };
+				Assert.That( HammerGuides.All.Count, Is.GreaterThanOrEqualTo( 10 ) );
+				Assert.That( HammerGuides.All.Select( g => g.Title ).Distinct().Count(), Is.EqualTo( HammerGuides.All.Count ), "titles are unique" );
+				foreach ( var guide in HammerGuides.All.Append( HammerGuides.Tour ) )
+				{
+					Assert.That( guide.Steps, Is.Not.Empty, guide.Title );
+					foreach ( var step in guide.Steps.Where( s => s.Done != null ) )
+						Assert.DoesNotThrow( () => step.Done( context ), $"{guide.Title}: {step.Text}" );
+				}
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate( tool );
+			}
+		}
 	}
 }

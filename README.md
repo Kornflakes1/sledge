@@ -84,6 +84,10 @@ Everything can be undone with Ctrl+Z. To learn the tools step by step, use
 
 ## Learning the tools
 
+Stuck on how to make something? **Help > How do I...** in the Hammer window has short
+step-by-step guides (boxes, stairs, doorways, bevels, clipping, terrain and more) that tick
+themselves off as you go, and **Help > Take the Tour** points out every part of the window.
+
 Valve's [Source 2 level design docs](https://developer.valvesoftware.com/wiki/Source_2/Docs/Level_Design)
 are the best way to learn how everything works: Navigation, Hammer Overview, Mesh Editing 1 to 4,
 Mesh Texturing and Creating Your First Room. Almost all of it carries over. The keys, modes and

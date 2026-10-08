@@ -435,10 +435,17 @@ namespace HammerUnity.EditorTools
 		{
 			HammerTrace.Log( $"ViewGUI {view.Name} {Event.current.type} mode={_mode} sel={Selection.Count}" );
 
+			using ( HammerPerf.Time( $"ViewGUI {Event.current.type}" ) )
+				ViewGUIInner( view );
+		}
+
+		void ViewGUIInner( HammerView view )
+		{
 			_view = view;
 			HammerViews.Current = view;
 			TrackMouse( view );
-			Selection.RemoveInvalid();
+			using ( HammerPerf.Time( "RemoveInvalid" ) )
+				Selection.RemoveInvalid();
 
 			// Keep primitives oriented to the camera, like s&box does with the active viewport
 			Sandbox.Primitives.PrimitiveBuilder.CameraForward = SourceSpace.ToSourceDirection( view.Camera.transform.forward );

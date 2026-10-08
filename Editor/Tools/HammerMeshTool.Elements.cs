@@ -310,12 +310,15 @@ namespace HammerUnity.EditorTools
 		void UpdateHover( Vector2 mouse )
 		{
 			HammerTrace.Log( "UpdateHover" );
-			var hover = _dragging ? null : PickElement( mouse );
+			IMeshElement hover;
+			using ( HammerPerf.Time( "UpdateHover.PickElement" ) )
+				hover = _dragging ? null : PickElement( mouse );
 
 			// The mesh under the mouse gets its outline, like Hammer
 			HammerMesh hoverMesh = hover?.Component;
-			if ( hoverMesh == null && !_dragging && MeshPicking.PickFace( mouse, MeshPicking.VisibleMeshes(), out var hit ) )
-				hoverMesh = hit.Face.Component;
+			using ( HammerPerf.Time( "UpdateHover.PickFace" ) )
+				if ( hoverMesh == null && !_dragging && MeshPicking.PickFace( mouse, MeshPicking.VisibleMeshes(), out var hit ) )
+					hoverMesh = hit.Face.Component;
 
 			if ( !Equals( hover, _hover ) || hoverMesh != _hoverMesh )
 			{
@@ -328,7 +331,9 @@ namespace HammerUnity.EditorTools
 		void ClickSelect( Vector2 mouse, bool add, bool toggle, bool doubleClick, bool alt = false )
 		{
 			HammerTrace.Log( "ClickSelect" );
-			var element = PickElement( mouse );
+			IMeshElement element;
+			using ( HammerPerf.Time( "ClickSelect.PickElement" ) )
+				element = PickElement( mouse );
 
 			if ( element is null )
 			{
@@ -548,15 +553,30 @@ namespace HammerUnity.EditorTools
 
 		void DrawElements()
 		{
+			using ( HammerPerf.Time( "DrawElements" ) )
+				DrawElementsInner();
+		}
+
+		void DrawElementsInner()
+		{
 			HammerTrace.Log( "DrawElements" );
 			// Every open edge (a hole's border) gets faint ticks, so holes are easy to spot; broken
 			// faces get red outlines
+			var openLines = new List<Vector3>();
 			foreach ( var component in EditMeshes() )
 			{
-				MeshHealth.Draw( component, Lift );
+				using ( HammerPerf.Time( "MeshHealth.Draw" ) )
+					MeshHealth.Draw( component, Lift );
 
-				foreach ( var he in OpenEdges( component ) )
-					DrawOpenEdgeTicks( component, he, OpenEdgeColor, true );
+				using ( HammerPerf.Time( "OpenEdgeTicks" ) )
+					foreach ( var he in OpenEdges( component ) )
+						DrawOpenEdgeTicks( component, he, OpenEdgeColor, true, openLines );
+			}
+
+			if ( openLines.Count > 0 )
+			{
+				Handles.color = OpenEdgeColor;
+				Handles.DrawLines( openLines.ToArray() );
 			}
 
 			// Wires (and vertices) only on the mesh under the mouse and meshes with something selected
@@ -594,7 +614,8 @@ namespace HammerUnity.EditorTools
 			// Face tints in the 3D views: one depth tested mesh per object, not a triangle at a time
 			var camera = HammerGUI.Camera;
 			var perspective = camera != null && !camera.orthographic;
-			if ( perspective ) DrawFaceTints();
+			using ( HammerPerf.Time( "DrawFaceTints" ) )
+				if ( perspective ) DrawFaceTints();
 
 			// Selection and hover: faint where hidden behind geometry, solid where visible
 			foreach ( var pass in new[] { UnityEngine.Rendering.CompareFunction.Greater, UnityEngine.Rendering.CompareFunction.LessEqual } )
@@ -605,14 +626,16 @@ namespace HammerUnity.EditorTools
 				// Face fills only where visible: a faint fill behind the surface fights with it
 				var hidden = pass == UnityEngine.Rendering.CompareFunction.Greater || perspective;
 
-				if ( Selection.Count > LargeSelection )
-					DrawLargeSelection( Fade( SelectedColor, alpha ), hidden ? Color.clear : SelectedFillColor );
-				else
-					foreach ( var element in Selection )
-						DrawElement( element, Fade( SelectedColor, alpha ), hidden ? Color.clear : SelectedFillColor );
+				using ( HammerPerf.Time( "DrawSelection" ) )
+					if ( Selection.Count > LargeSelection )
+						DrawLargeSelection( Fade( SelectedColor, alpha ), hidden ? Color.clear : SelectedFillColor );
+					else
+						foreach ( var element in Selection )
+							DrawElement( element, Fade( SelectedColor, alpha ), hidden ? Color.clear : SelectedFillColor );
 
-				if ( _hover != null && _hover.IsValid && !_dragging && !Selection.Contains( _hover ) )
-					DrawElement( _hover, Fade( HoverColor, alpha ), hidden ? Color.clear : HoverFillColor );
+				using ( HammerPerf.Time( "DrawHover" ) )
+					if ( _hover != null && _hover.IsValid && !_dragging && !Selection.Contains( _hover ) )
+						DrawElement( _hover, Fade( HoverColor, alpha ), hidden ? Color.clear : HoverFillColor );
 			}
 
 			Handles.zTest = zTest;
@@ -646,7 +669,7 @@ namespace HammerUnity.EditorTools
 		/// batch of thin lines, fills only checked for facing the camera (not for being hidden
 		/// behind something), no 2D crosshatch. Drawing thousands one at a time took seconds.
 		/// </summary>
-		const int LargeSelection = 150;
+		const int LargeSelection = 12;
 
 		void DrawLargeSelection( Color color, Color fill )
 		{
@@ -747,7 +770,9 @@ namespace HammerUnity.EditorTools
 		// Bright and thick so a hole reads at a glance, whatever's around it
 		static readonly Color OpenEdgeColor = new( 1.0f, 0.68f, 0.12f, 1.0f );
 
-		static void DrawOpenEdgeTicks( HammerMesh component, HalfEdgeMesh.HalfEdgeHandle edge, Color color, bool withLine = false )
+		// With <paramref name="batch"/> the ticks (and the edge itself, if asked) are only collected, to be
+		// drawn in one go by the caller: a draw call per tick took milliseconds a frame on big maps
+		static void DrawOpenEdgeTicks( HammerMesh component, HalfEdgeMesh.HalfEdgeHandle edge, Color color, bool withLine = false, List<Vector3> batch = null )
 		{
 			var mesh = component.Mesh;
 			var face = mesh.GetHalfEdgeFace( edge );
@@ -780,6 +805,13 @@ namespace HammerUnity.EditorTools
 				lines.Add( Lift( p + tangent * size * 0.07f ) );
 				if ( travelled >= length ) break;
 				travelled = Mathf.Min( length, travelled + size * 0.07f );
+			}
+
+			if ( batch != null )
+			{
+				if ( withLine ) { batch.Add( Lift( a ) ); batch.Add( Lift( b ) ); }
+				batch.AddRange( lines );
+				return;
 			}
 
 			Handles.color = color;
